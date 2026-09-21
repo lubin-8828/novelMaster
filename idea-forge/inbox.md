@@ -55,3 +55,4 @@
 - 回答 [2026-09-21 16:30] (#doc) 要求把方案整理成详细设计文档 → 产出 docs/DESIGN.md（v1）。
 - 回答 [2026-09-21 17:10] (#build) 批准开工。里程碑 1（骨架）已交付并验证。
 - 回答 [2026-09-21 23:30] (#repo) 已在 GitHub 创建私有仓库并推送成功：https://github.com/lubin-8828/novelMaster （main @ 698b631）
+- 回答 [2026-09-21 23:50] (#doc) 按 pi-init-project 规范重构文档：根 DESIGN.md + docs/design/ 7 个子文档 + CLAUDE.md；一致性检查纳入 tests/smoke.ts。
