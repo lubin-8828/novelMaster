@@ -6,7 +6,6 @@
 > 代码完成后必须与文档保持一致，不一致时以文档为准修改代码。
 
 - 版本：v1（2026-09-21）
-- 上游需求方案：`idea-forge/plans/2026-09-21-novel-master.md`（`idea-forge` 记录「要什么」，本文档记录「怎么做」）
 
 ---
 
@@ -150,7 +149,6 @@ novelMaster/
 ├── DESIGN.md                     # 本文件（根设计文档）
 ├── CLAUDE.md                     # 面向 Agent 的项目说明与强制规则
 ├── docs/design/                  # 设计子文档（见 §5 导航索引）
-├── idea-forge/                   # 需求打磨过程记录（inbox + 方案），只增不改
 ├── bin/novelmaster.mjs           # 可执行入口
 ├── src/                          # 源码（结构见 docs/design/architecture.md）
 ├── tests/smoke.ts                # 冒烟测试（不启动 TUI）

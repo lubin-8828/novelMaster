@@ -106,7 +106,7 @@ novelMaster/
 │   └── prompts/                  # 各角色 system prompt 模板      ← 里程碑 4
 ├── tests/smoke.ts                # 冒烟测试（不启动 TUI）
 ├── docs/design/                  # 设计子文档
-└── idea-forge/                   # 需求打磨过程记录
+└── novels/                       # 默认小说根目录（git 忽略）
 ```
 
 标注 `← 里程碑 N` 的目录/文件尚未创建，属于规划。已交付内容见 `ops.md「实施进度」`。
