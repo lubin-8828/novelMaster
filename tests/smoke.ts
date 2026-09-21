@@ -3,13 +3,14 @@
  *
  * 运行：node tests/smoke.ts
  */
-import { mkdirSync, rmSync } from "node:fs";
-import { join } from "node:path";
+import { mkdirSync, readdirSync, rmSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { novelMasterExtension } from "../src/extension/index.ts";
 import { initNovel, isNovelRoot, slugify } from "../src/data/init.ts";
 import { openNovelAt } from "../src/data/novel.ts";
 import { writeConfig } from "../src/data/paths.ts";
+import { exists, readText } from "../src/data/io.ts";
 import { renderHelp, renderLayerSection, renderStatus } from "../src/extension/render.ts";
 import {
   ALL_COMMANDS,
@@ -241,6 +242,94 @@ check(
 );
 
 check("层面状态可读回", getLayer() === "write");
+
+/* ---------------- 5. 文档一致性 ---------------- */
+
+section("文档一致性");
+
+// 把「先改设计再改代码」「代码必须与文档一致」这两条规则变成机械检查。
+// 只靠自觉的规则，在第二次改动时就会失效。
+
+const BASE = process.cwd();
+const SUB_DOCS = ["architecture", "data", "ai", "interaction", "pipeline", "ops", "decisions"];
+
+check("根设计文档存在", exists(join(BASE, "DESIGN.md")));
+check("CLAUDE.md 存在", exists(join(BASE, "CLAUDE.md")));
+for (const name of SUB_DOCS) {
+  check(`子文档 docs/design/${name}.md 存在`, exists(join(BASE, "docs", "design", `${name}.md`)));
+}
+
+const rootDesign = readText(join(BASE, "DESIGN.md")) ?? "";
+const claude = readText(join(BASE, "CLAUDE.md")) ?? "";
+
+// 规则 4：根文档必须索引全部子文档；子文档必须回指根文档。
+for (const name of SUB_DOCS) {
+  check(`根文档索引了 ${name}.md`, rootDesign.includes(`docs/design/${name}.md`));
+  const sub = readText(join(BASE, "docs", "design", `${name}.md`)) ?? "";
+  check(`${name}.md 回指父文档`, sub.includes("../../DESIGN.md"));
+}
+
+// 四条强制规则必须逐字或等价地存在于 CLAUDE.md。
+const RULE_MARKERS: Array<[string, string]> = [
+  ["规则 1 标题", "规则 1：动手前必读设计文档"],
+  ["规则 1 正文", "必须先完整阅读设计文档"],
+  ["规则 2 标题", "规则 2：先改设计，再改代码"],
+  ["规则 2 正文", "不允许先写代码后补文档"],
+  ["规则 3 正文", "以设计文档为标准修改代码"],
+  ["规则 4 标题", "规则 4：树状拆分设计文档"],
+  ["设计文档位置声明", "`DESIGN.md`（项目根目录）"],
+];
+for (const [label, marker] of RULE_MARKERS) {
+  check(`CLAUDE.md 含${label}`, claude.includes(marker));
+}
+
+// 命令名：文档的命令表必须与代码里的 COMMANDS 完全对应。
+const interaction = readText(join(BASE, "docs", "design", "interaction.md")) ?? "";
+for (const name of ALL_COMMANDS) {
+  check(`interaction.md 记录了 /${name}`, interaction.includes(`\`/${name}\``));
+}
+const docCommands = [...interaction.matchAll(/^\| `\/([a-z-]+)/gm)].map((m) => m[1]);
+const extraInDoc = [...new Set(docCommands)].filter(
+  (n) => !(ALL_COMMANDS as string[]).includes(n) && !PI_BUILTINS.has(n),
+);
+check("interaction.md 没有代码里不存在的命令", extraInDoc.length === 0, `多余：${extraInDoc.join(", ")}`);
+
+// 代码 → 文档：src/ 下每个源文件都必须在架构文档的源码树里出现。
+const architecture = readText(join(BASE, "docs", "design", "architecture.md")) ?? "";
+const srcFiles: string[] = [];
+const walk = (dir: string): void => {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) walk(full);
+    else if (entry.name.endsWith(".ts")) srcFiles.push(entry.name);
+  }
+};
+walk(join(BASE, "src"));
+check("src/ 下有源文件", srcFiles.length > 0);
+const undocumented = srcFiles.filter((f) => !architecture.includes(f));
+check(
+  "architecture.md 收录了全部 src/ 源文件",
+  undocumented.length === 0,
+  `未记录：${undocumented.join(", ")}`,
+);
+
+// 链接 → 文件：文档里的相对 .md 链接必须都存在（双向导航不能是死链）。
+let deadLinks = 0;
+const checkLinks = (file: string): void => {
+  const text = readText(file) ?? "";
+  for (const m of text.matchAll(/\]\(([^)]+\.md)\)/g)) {
+    const target = m[1];
+    if (target === undefined) continue;
+    if (!exists(resolve(dirname(file), target))) {
+      deadLinks++;
+      console.log(`        死链：${file.replace(BASE, ".")} → ${target}`);
+    }
+  }
+};
+checkLinks(join(BASE, "DESIGN.md"));
+checkLinks(join(BASE, "CLAUDE.md"));
+for (const name of SUB_DOCS) checkLinks(join(BASE, "docs", "design", `${name}.md`));
+check("文档链接无死链", deadLinks === 0, `${deadLinks} 条`);
 
 rmSync(ROOT, { recursive: true, force: true });
 
