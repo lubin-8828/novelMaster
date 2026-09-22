@@ -52,6 +52,34 @@ export function readJson<T>(path: string): T | null {
   }
 }
 
+/**
+ * 读 JSON 文件，区分「文件不存在」与「文件坏了」。
+ *
+ * 不存在返回 null（首次启动、还没建书是常态）。
+ * 存在但不是合法 JSON 则**抛错** —— 静默返回 null 会把「你的书坏了」
+ * 伪装成「没有这本书」，用户看不到任何异常信号。这违反 ops.md 的
+ * 「失败时绝不静默降级」：建立在假信号上的判断会让整套设计失效。
+ */
+export function readJsonFile(path: string): unknown | null {
+  let text: string;
+  try {
+    text = readFileSync(path, "utf8");
+  } catch (err) {
+    if (isNotFound(err)) return null;
+    throw err;
+  }
+  try {
+    return JSON.parse(text) as unknown;
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    throw new Error(`${path} 不是合法 JSON：${detail}`);
+  }
+}
+
+function isNotFound(err: unknown): boolean {
+  return typeof err === "object" && err !== null && (err as { code?: unknown }).code === "ENOENT";
+}
+
 export function readText(path: string): string | null {
   try {
     return readFileSync(path, "utf8");

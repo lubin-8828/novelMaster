@@ -12,7 +12,7 @@
   },
   "scripts": {
     "start": "node src/cli.ts",
-    "test": "node tests/smoke.ts",
+    "test": "node tests/all.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

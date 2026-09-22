@@ -2,16 +2,16 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { NAMES } from "./paths.ts";
 import { exists, writeJsonAtomic, writeTextAtomic } from "./io.ts";
+import { stamp } from "./md.ts";
 import {
+  emptyChapterIndex,
+  emptyCharacterIndex,
+  emptyEventIndex,
   emptyMeta,
+  emptyRelations,
+  emptySettingIndex,
   emptyState,
-  SCHEMA_VERSION,
-  type ChapterIndex,
-  type CharacterIndex,
-  type EventIndex,
   type NovelMeta,
-  type RelationsDoc,
-  type SettingIndex,
 } from "./schema.ts";
 
 export interface NovelInitInput {
@@ -49,7 +49,7 @@ export function isNovelRoot(root: string): boolean {
  * 初始化一本小说。
  *
  * 已存在同名的 meta.json 时拒绝执行 —— 覆盖一本小说等于抹掉用户全部创作，
- * 这种操作不能有"手滑"的入口，必须是显式的、另起的动作。
+ * 这种操作不能有「手滑」的入口，必须是显式的、另起的动作。
  */
 export function initNovel(root: string, input: NovelInitInput): NovelInitResult {
   if (isNovelRoot(root)) {
@@ -88,13 +88,45 @@ export function initNovel(root: string, input: NovelInitInput): NovelInitResult 
   write(NAMES.inbox, () =>
     writeTextAtomic(
       join(root, NAMES.inbox),
-      `# 想法收集箱 (Inbox)\n\n> 追加式。不整理、不评判、不删除。\n> - [YYYY-MM-DD HH:mm] 内容\n\n- [${stamp()}] 建书想法：${input.premise}\n`,
+      [
+        "# 想法收集箱 (Inbox)",
+        "",
+        "> 追加式。不整理、不评判、不删除。",
+        "",
+        "## 记录",
+        "",
+        `- [${stamp()}] 建书想法：${input.premise}`,
+        "",
+      ].join("\n"),
     ),
   );
   write(NAMES.outline, () =>
     writeTextAtomic(
       join(root, NAMES.outline),
-      `# ${input.title} · 故事主线大纲\n\n## 一句话主题\n\n（待定）\n\n## 阶段划分\n\n（待定）\n\n## 主要冲突\n\n（待定）\n\n## 结局\n\n（待定）\n\n## 修订记录\n\n- [${stamp()}] 建立大纲骨架。\n`,
+      [
+        `# ${input.title} · 故事主线大纲`,
+        "",
+        "## 一句话主题",
+        "",
+        "（待定）",
+        "",
+        "## 阶段划分",
+        "",
+        "（待定）",
+        "",
+        "## 主要冲突",
+        "",
+        "（待定）",
+        "",
+        "## 结局",
+        "",
+        "（待定）",
+        "",
+        "## 修订记录",
+        "",
+        `- [${stamp()}] 建立大纲骨架。`,
+        "",
+      ].join("\n"),
     ),
   );
   write(`${NAMES.logsDir}/${NAMES.operations}`, () =>
@@ -102,30 +134,4 @@ export function initNovel(root: string, input: NovelInitInput): NovelInitResult 
   );
 
   return { root, meta, files };
-}
-
-function stamp(): string {
-  const d = new Date();
-  const p = (n: number): string => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
-}
-
-function emptySettingIndex(): SettingIndex {
-  return { schemaVersion: SCHEMA_VERSION, items: [] };
-}
-
-function emptyCharacterIndex(): CharacterIndex {
-  return { schemaVersion: SCHEMA_VERSION, characters: [] };
-}
-
-function emptyRelations(): RelationsDoc {
-  return { schemaVersion: SCHEMA_VERSION, relations: [] };
-}
-
-function emptyEventIndex(): EventIndex {
-  return { schemaVersion: SCHEMA_VERSION, events: [] };
-}
-
-function emptyChapterIndex(): ChapterIndex {
-  return { schemaVersion: SCHEMA_VERSION, chapters: [] };
 }

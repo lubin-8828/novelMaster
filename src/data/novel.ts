@@ -1,7 +1,7 @@
-import { join } from "node:path";
-import { NAMES, readConfig } from "./paths.ts";
-import { readJson } from "./io.ts";
-import type { NovelMeta, NovelState } from "./schema.ts";
+import { readConfig, metaPath, statePath, NAMES } from "./paths.ts";
+import { readDoc } from "./doc.ts";
+import { errorText } from "./errors.ts";
+import { type NovelMeta, NovelMetaSchema, type NovelState, NovelStateSchema } from "./schema.ts";
 
 export interface OpenNovel {
   root: string;
@@ -9,16 +9,62 @@ export interface OpenNovel {
   state: NovelState;
 }
 
-/** 按绝对路径打开小说。文件缺失或损坏返回 null，不抛错。 */
+/**
+ * 按绝对路径打开小说。**读盘后校验 schema**：这些文件用户可以直接编辑，
+ * 手改出的非法结构必须在这里暴露，而不是等审查报告引用它时才炸。
+ *
+ * 失败返回 null（用于「这是不是一本小说」的探测），不抛错。
+ */
 export function openNovelAt(root: string): OpenNovel | null {
-  const meta = readJson<NovelMeta>(join(root, NAMES.meta));
-  const state = readJson<NovelState>(join(root, NAMES.state));
-  if (!meta || !state) return null;
-  return { root, meta, state };
+  try {
+    const meta = readDoc(metaPath(root), NovelMetaSchema, NAMES.meta);
+    const state = readDoc(statePath(root), NovelStateSchema, NAMES.state);
+    return { root, meta, state };
+  } catch {
+    return null;
+  }
 }
 
-/** 打开当前 cwd 配置里指向的小说。 */
+/**
+ * 打开「当前打开的小说」。未打开或文件损坏都返回 null，不抛错 ——
+ * 状态栏、提示词注入这些地方只关心「现在有没有一本可用的书」。
+ * 需要区分「没打开」与「文件坏了」的调用方用 `openNovelStrict`。
+ */
 export function openNovel(cwd: string): OpenNovel | null {
   const root = readConfig(cwd).novelRoot;
-  return root ? openNovelAt(root) : null;
+  return root === null ? null : openNovelAt(root);
+}
+
+export interface OpenFailure {
+  ok: false;
+  /** 给 LLM 看的错误文本：它唯一的修正途径就是这段文字。 */
+  error: string;
+}
+
+export interface OpenSuccess {
+  ok: true;
+  novel: OpenNovel;
+}
+
+export type OpenStrictResult = OpenSuccess | OpenFailure;
+
+/**
+ * 打开「当前打开的小说」，失败时给出可操作的错误文本。
+ *
+ * 与 `openNovelAt` 的分工：这里服务工具层，**必须说清为什么失败** ——
+ * 「没打开小说」和「小说文件坏了」对 LLM 是两个完全不同的行动指令。
+ */
+export function openNovelStrict(cwd: string): OpenStrictResult {
+  const config = readConfig(cwd);
+  if (config.novelRoot === null) {
+    return { ok: false, error: "当前没有打开小说。请用户先执行 /init 新建一本，或从已有小说继续。" };
+  }
+  const root = config.novelRoot;
+  try {
+    const meta = readDoc(metaPath(root), NovelMetaSchema, NAMES.meta);
+    const state = readDoc(statePath(root), NovelStateSchema, NAMES.state);
+    return { ok: true, novel: { root, meta, state } };
+  } catch (err) {
+    return { ok: false, error: `打开小说失败（${root}）：${errorText(err)}。请不要自行修复文件，先告知用户。` };
+  }
 }

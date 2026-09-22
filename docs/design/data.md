@@ -54,7 +54,16 @@
 
 ## 3. 文件 schema
 
-类型定义在 `src/data/schema.ts`（当前是 TypeScript 接口，里程碑 2 补 typebox 运行时校验）。本节 JSON 是字段语义的展开说明。
+类型定义在 `src/data/schema.ts`。**schema 只有一份定义：typebox 定义，TypeScript 类型由 `Static<>` 从同一份定义推导。**
+
+**为什么不能手写 interface + 另写一套 typebox。** 两者是同一个事实的两个副本，改一处忘一处就会漂移 —— 而且漂移的后果是「类型检查说合法、运行时校验说非法」这种最难查的形态。这与 `decisions.md「踩坑记录」`里的命令表是同一类错误，修法也一样：让那个事实只有一处来源。
+
+两条强制要求：
+
+1. **每个对象都必须显式写 `additionalProperties: false`。** typebox 1.x 默认**允许**额外属性 —— 不写就等于接受 LLM 传来的任意字段名变体（`characters` 写成 `characterList`、`establishedIn` 写成 `established_in`），静默落盘成脏数据。而这正是 schema 校验存在的全部理由（见 `decisions.md`「结构化数据只经 custom tools 写入」）。
+2. **写盘前校验，读盘后也校验。** 读也校验的理由：这些文件用户可以直接编辑，手改出的非法结构必须在**被当作审查依据之前**暴露，而不是等审查报告引用它时才炸。
+
+本节 JSON 是字段语义的展开说明。
 
 ### 3.1 `meta.json`
 
@@ -186,6 +195,7 @@
     { "id": "E-003", "title": "确认事态真实性", "stage": "第一幕",
       "status": "in_progress", "order": 30, "chapters": [11, 12],
       "dependsOn": ["E-002"], "leadsTo": ["E-004"],
+      "characters": ["C-001", "C-002"], "settings": ["S-001"],
       "origin": "ai_proposed",
       "plantedIn": null, "payoffExpectedAt": null }
   ]
@@ -194,6 +204,11 @@
 
 `origin` 枚举：`ai_proposed | user_specified | foreshadow`。
 `status` 枚举：`planned | in_progress | done | abandoned`。
+`order` 由工具自动分配（新建时取现有最大值 + 10），不需要调用方关心。
+
+**`characters` / `settings` 是「涉及」区段的唯一来源。** 这两个字段不是装饰：
+`events/E-NNN.md` 里的「涉及」区段由代码从它们渲染。先把它们做成结构化字段，
+那段文本才可校验；否则「涉及了什么」就只能靠 LLM 手写，而手写的东西无法被审查引用。
 
 **伏笔复用同一结构**，不另建台账：`origin: "foreshadow"`，`plantedIn`（埋设章节）与 `payoffExpectedAt`（预计回收章节，可空）才有值。
 
@@ -233,6 +248,8 @@
 ```
 
 **一章可跨多个事件，但必须有 `primaryEventId` 主事件。** 真实写作里常见「推进主事件 + 回收一个伏笔」或「收尾旧事件 + 铺垫新事件」，硬限制成一章一事件会逼用户在无关的地方切章。但主次必须分明 —— `primaryEventId` 是上下文装配器「当前事件全文」的取数依据，没有它装配器不知道该注入哪条（见 `ai.md「装配规格」`）。
+
+**`status` 是派生字段，不是第二份进度真相。** 进度真相只有 `state.json` 一份（见「四条设计原则」）；这里的 `status` 是它的展开值，由工具在状态变化时同步写入，好让「按章查历史」时不必再回读 `state.json`。两者不一致时以 `state.json` 为准。
 
 ### 3.11 `chapters/NNN.summary.md`
 
@@ -274,6 +291,30 @@ primaryEvent: E-003
 
 上下文装配器靠它判定「本章与哪些人物、设定相关」（见 `ai.md「相关性判定」`）。
 
+同一文件底部还有「确认记录」区段，与大纲正文分开：
+
+```markdown
+## 确认记录
+- [2026-09-21 14:03] 用户确认第 12 章大纲。
+```
+
+**大纲正文是覆盖式，确认记录是追加式。** 重推本章大纲会覆盖正文，但确认记录必须原样保留 —— 否则「这一章的大纲被改过几次」就无迹可寻。写入时由工具把两个区段分开处理，调用方不需要关心。
+
+### 3.13 `inbox.md`
+
+```markdown
+# 想法收集箱 (Inbox)
+
+> 追加式。不整理、不评判、不删除。
+
+## 记录
+
+- [2026-09-21 10:00] 也许可以加一个内鬼线。 #脑洞
+```
+
+可追加区段是 **`## 记录`**，不是文件标题（标题是一级 `#`）。
+这条差别看似琐碎，但搞错了就是「写入被锚点保护拒绝」或（更糟）「行被丢到文件末尾重复结构」。
+
 ---
 
 ## 4. 写入约定
@@ -289,6 +330,29 @@ primaryEvent: E-003
 
 **追加式写入的实现要求**：先读、定位锚点、插入、整体覆盖写。这看起来像「重写」，但校验层会断言「原有行全部保留」，否则**拒绝写入并报警**（这是数据损坏级信号，见 `ops.md「错误处理」`）。这是唯一能同时保证追加语义和原子性的做法。
 
+保行断言的判定方式是**子序列比对**，不是「行数不减」：原有行必须按原顺序全部出现在新内容里。行数比对是无效的 —— 删一行加一行也能保持行数不变。实现在 `src/data/md.ts`。
+
+**锚点缺失时拒绝写入，而不是新建区段。** 区段不存在说明文件结构与 schema 不符（如用户手工删掉了 `## 关键事件时间轴`），此时自动补一个空区段会把「结构已被破坏」这个事实隐藏掉。
+
+### 4.1 索引与详述的双写顺序
+
+带详述文件的资料（设定 `S-NNN.md`、人物 `C-NNN.md`、事件 `E-NNN.md`）一次 upsert 要写两个文件，而两次原子写之间存在崩溃窗口。顺序固定为：
+
+**先写详述 md，再写索引 json。**
+
+两个方向的后果不对称：
+
+| 崩溃点 | 留下的状态 | 严重程度 |
+|--------|-----------|----------|
+| 写完 md、未写索引 | 孤儿详述文件（索引里不存在） | 无害且可恢复 —— 下次 upsert 同一 ID 会覆写它 |
+| 写完索引、未写 md | **坏引用**（索引里有条目，点进去文件不存在） | 审查报告会引用一个不存在的 `S-NNN`，依据链当场断掉 |
+
+所以顺序不可交换。这不是「尽量先写 md」的风格问题，而是必须固定下来的写入协议。
+
+`logs/operations.jsonl` 每行 `{ts, op, target, actor}`：`op` 是工具名，`target` 是相对小说根的路径，`actor` 恒为 `"llm"`。
+
+**`actor` 写死 `"llm"` 是诚实而不是冗余**：用户直接编辑 txt 与 md 不走工具，也不会被记录。日志只声称「LLM 通过工具做了什么」，不声称「文件发生过什么变化」—— 把后者写进日志就是伪造完整性。
+
 ---
 
 ## 5. 正文校验
@@ -303,7 +367,14 @@ primaryEvent: E-003
 | `` ` `` | 行内 / 围栏代码 |
 | 行首 `- ` / `* ` 且后接空格 | 列表 |
 
-**只提示不阻断。** 理由：小说正文里出现 `-` 是合法的（破折号、对话），硬拦会误伤；而且用户要亲手编辑这个文件，最终解释权在他。
+**只提示不阻断，但提示必须是代码事实。** 理由：小说正文里出现 `-` 是合法的（破折号、对话），硬拦会误伤；而且用户要亲手编辑这个文件，最终解释权在他。
+
+工具是单次调用，没有「先问你、再接着写」的二次交互能力，所以落点是**两段式**：
+
+1. 首次调用（不带 `acknowledgeMarkdown`）命中标记 → **不落盘**，把命中清单（行号 + 片段 + 命中模式）返回给 LLM，让它去问用户；
+2. 用户确认后，LLM 带 `acknowledgeMarkdown: true` 重新调用 → 落盘。
+
+为什么不是「先落盘再提示」：那样「不阻断」就变成了「阻断无效」—— 文件已经写坏了，提示只是事后通知。为什么不是「工具内直接弹确认框」：工具执行在 agent 循环里，弹 UI 会让工具的行为依赖宿主是否有 UI，而纯文本返回在 TUI 之外（RPC、脚本）同样成立。
 
 ---
 
@@ -312,6 +383,13 @@ primaryEvent: E-003
 - 格式：`<前缀>-<三位序号>`，前缀 `S` / `C` / `R` / `E`。
 - 分配时读取对应 `index.json` 的最大序号 + 1，**不回填已删除条目的空号**。
 - 删除 = 置 `deprecated: true`（设定）或 `status: abandoned`（事件），**不物理删除**。理由：审查报告可能引用旧 ID，物理删除会让历史报告变成死链。
+
+实现契约（`src/data/ids.ts`）：
+
+- `nextId(kind, existing: string[]): string` —— 从已有 ID 集合里算最大序号 + 1。
+- **最大序号从「所有出现过该前缀的 ID」里算，不只看未废弃的。** 若只算活跃条目，废弃 `S-003` 后下一个新条目会拿到 `S-003` —— ID 被复用了，而引用它的历史审查报告会指向另一个东西。这正是「永不复用」要防的唯一一种事故。
+- 序号超过 999 时**不报错、直接扩位**（`S-1000`）。理由：一部超长篇小说可能真的突破千条设定，而拒绝分配会让用户手改 ID —— 那才是真正的失控。
+- 传入的 ID 不符合 `<前缀>-<数字>` 格式时忽略它（而不是抛错）—— 用户手工录过一条 `S-设定` 不应该导致整本书无法分配新 ID。
 
 ---
 
@@ -331,21 +409,23 @@ primaryEvent: E-003
 
 | 工具 | 用途 | 关键参数 |
 |------|------|----------|
-| `novel_read_index` | 读某一类资料的索引（设定/人物/事件/章节） | `kind` |
-| `novel_setting_upsert` | 新增或更新设定条目 | `id?`, `name`, `category`, `summary`, `body` |
-| `novel_setting_append_revision` | 往设定条目追加修订记录 | `id`, `text` |
-| `novel_character_upsert` | 新增或更新人物（静态档案 + 状态） | `id?`, `name`, `aliases`, `role`, `static` |
+| `novel_read_index` | 读某一类资料的索引（设定/人物/关系/事件/章节） | `kind` |
+| `novel_setting_upsert` | 新增或更新设定条目 | `id?`, `name`, `category`, `summary`, `body`, `establishedIn?` |
+| `novel_setting_append_revision` | 往设定条目追加修订记录 | `id`, `chapter`, `text` |
+| `novel_character_upsert` | 新增或更新人物（静态档案 + 状态） | `id?`, `name`, `aliases?`, `role`, `status?`, `firstAppeared?`, `static?`, `body?` |
 | `novel_character_append_timeline` | 给人物追加一条关键事件 | `id`, `chapter`, `text` |
-| `novel_relation_upsert` | 新增或更新关系 | `id?`, `from`, `to`, `type`, `status` |
-| `novel_relation_append_history` | 追加关系变更 | `id`, `chapter`, `change` |
+| `novel_relation_upsert` | 新增或更新关系 | `id?`, `from`, `to`, `type`, `directed?`, `status?`, `since?` |
+| `novel_relation_append_history` | 追加关系变更 | `id`, `chapter`, `change`, `nextStatus?` |
 | `novel_outline_write` | 写主线大纲（覆盖式） | `markdown` |
 | `novel_outline_append_revision` | 追加大纲修订记录 | `text` |
-| `novel_event_upsert` | 新增或更新事件元信息 | `id?`, `title`, `stage`, `origin`, `dependsOn`, `leadsTo`, `plantedIn`, `payoffExpectedAt` |
+| `novel_event_upsert` | 新增或更新事件元信息 | `id?`, `title`, `stage`, `origin`, `status?`, `order?`, `dependsOn?`, `leadsTo?`, `characters?`, `settings?`, `plantedIn?`, `payoffExpectedAt?` |
 | `novel_event_refine` | 事件细化：更新「当前描述」+ 追加「细化历史」 | `id`, `chapter`, `description` |
 | `novel_event_set_status` | 改事件状态 | `id`, `status` |
 | `novel_event_link_chapter` | 把章节挂到事件 | `eventId`, `chapter`, `primary` |
-| `novel_chapter_outline_write` | 写本章大纲（覆盖式 + 追加确认记录） | `chapter`, `markdown` |
-| `novel_chapter_write` | 写正文（含正文校验） | `chapter`, `text` |
+| `novel_chapter_outline_write` | 写本章大纲（覆盖式 + 追加确认记录） | `chapter`, `title`, `markdown`, `confirmNote?` |
+| `novel_event_link_chapter` | 把章节挂到事件 | `eventId`, `chapter`, `primary` |
+| `novel_chapter_outline_write` | 写本章大纲（覆盖式 + 追加确认记录） | `chapter`, `title`, `markdown`, `confirmNote?` |
+| `novel_chapter_write` | 写正文（含正文校验） | `chapter`, `text`, `acknowledgeMarkdown?` |
 | `novel_chapter_summary_write` | 写本章摘要（固定小节） | `chapter`, `sections` |
 | `novel_chapter_report_write` | 写审查/去 AI 味/回填报告 | `chapter`, `kind`, `markdown` |
 | `novel_state_update` | 更新状态机（受转移表约束） | `chapterStatus?`, `currentChapter?`, `currentEventId?`, `pendingReflow?` |
@@ -353,8 +433,86 @@ primaryEvent: E-003
 | `submit_findings` | **仅审查子会话可见**：提交结构化审查结果 | 见 `pipeline.md「审查引擎」` |
 | `submit_brainstorm` | **仅脑暴子会话可见**：提交角色产出 | `angle`, `points[]` |
 
+表格之外的参数细节，这些是「枚举值写死在代码里」的落点 —— 让 LLM 自造枚举值是另一种形式的结构漂移：
+
+**共 19 个 `novel_*` 工具**，全部一次性注册。两个专属于子会话的工具（`submit_findings` / `submit_brainstorm`）不在里程碑 2 范围内，分别在里程碑 8 与 11 交付。
+
+几条不写在参数表里、但会改变工具行为的约束：
+
+- `novel_event_upsert`：`order` 省略时新建取「现有最大值 + 10」，保证新事件排在最后。
+- `novel_event_upsert`：非伏笔事件带 `plantedIn` / `payoffExpectedAt`（非 `null`）会被拒绝 —— 这两个字段只属于伏笔。
+- `novel_event_link_chapter`：**该章必须已有章节记录**（先写过章节大纲）。否则拒绝，而不是静默丢掉 `primaryEventId`。
+- `novel_character_append_timeline` / `novel_setting_append_revision` 等追加类工具：只增不改，原有行必须全保留，否则拒绝写入。
+
+| 参数 | 取值 |
+|------|------|
+| `novel_read_index.kind` | `setting` / `character` / `relation` / `event` / `chapter` |
+| `novel_setting_upsert.category` | `world_rule` / `location` / `faction` / `item` / `taboo` / `custom` |
+| `novel_character_upsert.role` | `protagonist` / `antagonist` / `supporting` / `minor` |
+| `novel_character_upsert.status` | `alive` / `dead` / `missing` / `unknown` |
+| `novel_relation_upsert.status` | `active` / `broken` / `ended` |
+| `novel_event_upsert.origin` | `ai_proposed` / `user_specified` / `foreshadow` |
+| `novel_event_set_status.status` | `planned` / `in_progress` / `done` / `abandoned` |
+| `novel_chapter_report_write.kind` | `review` / `deai` / `reflow` → 落 `.review.md` / `.deai.md` / `.reflow.md` |
+
+**`novel_chapter_summary_write.sections` 是结构化对象，不是一段 markdown。** 小节标题由代码生成，不由 LLM 写：
+
+```json
+{
+  "synopsis": "150–300 字梗概",
+  "appearedCharacters": ["C-001"],
+  "appearedLocations": ["S-004"],
+  "advancedEvents": [{ "id": "E-003", "note": "细化一档" }],
+  "newSettings": [],
+  "newForeshadows": ["E-009"],
+  "endState": "本章结束时的人物位置、处境、悬念"
+}
+```
+
+理由：`data.md「chapters/NNN.summary.md」`要求固定小节，而「固定」只有写死在代码里才成立。如果让 LLM 传整段 markdown，小节标题会随章节漂移成「出场人物」「登场人物」「主要人物」，而下游要靠这些小节做机器读取（见 `ai.md「装配规格」`）。
+
 ### 7.3 状态转移校验
 
 `novel_state_update` 必须校验状态转移合法性：非法转移（如 `drafted → accepted`）**直接拒绝**并返回错误文本。
 
 **理由**：状态机是闸门的执行体（见 `pipeline.md「回填：结章闸门」`）。如果它可被 LLM 绕过，闸门就不存在 —— 提示词约束挡不住一个想抄近路的模型，schema 校验才能。
+
+合法转移的**唯一来源**是 `pipeline.md「章状态机」`里的转移表，实现在 `src/data/state.ts`。转移表不放这里，避免同一张表在文档里出现两次。
+
+### 7.4 写入护栏：把「只能走工具」变成代码事实
+
+7.1 的决策若只写在提示词里，它就不是约束，是建议。护栏挡在 `src/tools/guard.ts`，只有一条：
+
+| 拦住的路径 | 落点 | 理由 |
+|-----------|------|------|
+| `write` / `edit` 写 `<小说根>/` 下的任何路径 | `pi.on("tool_call")` 返回 `{ block: true, reason }` | 模型不知道有 `novel_*` 工具时，会直接手写 `meta.json`；手写的 JSON 会漂移，而依据链建立在这些文件上 |
+
+除了拦，它还把**正确的工具名写进错误文本** —— 模型被拦后的自然反应是换工具，而不是想办法绕。
+
+**不拦 `bash` / `powershell`，这是明确的取舍。** shell 确实能绕过护栏（一句 `echo '{}' > meta.json`），但：
+
+- 关掉它的代价是**真实且立刻发生**的 —— AI 不能帮你跑 git、查日志、跑测试、看目录树；
+- 而走这条旁路要求模型**主动绕开一个明确的拒绝提示**，那不是它被拦住后的行为。
+
+护栏的价值在于**把正常路径摆正**，不在于穷举所有绕法。为堵一条模型不会走的旁路而砍掉一整项能力，是把「机制闭合」当成了目的本身。
+
+**不受影响的三件事**：用户自己在输入框敲 `!` 执行的 shell、pi 的内建命令、以及 `<小说根>/` 目录**之外**的 write/edit。
+
+**只读工具保留**：审查引擎要靠读原始资料来判断「有据可查」，把 `read` 关掉会让依据链无从建立。
+
+### 7.5 校验失败的处置
+
+| 情形 | 行为 |
+|------|------|
+| schema 校验失败 | 拒绝写入，返回**具体哪个字段、错在哪**（不是「参数非法」这种无法修正的提示），让 LLM 修正后重试 |
+| 同类工具连续 3 次校验失败 | 中止并明确报给用户。理由：连续失败通常不是「模型手滑」而是「模型理解错了数据结构」，第 4 次不会更好，只会烧 token |
+| 引用的 ID 不存在 | 拒绝写入并列出**最接近的候选 ID**。理由：`C-001` 写成 `C-01` 是最常见的错误形态，给出候选比要求用户重述更省事 |
+| 追加式写入检测到原有行丢失 | 拒绝写入并报警（数据损坏级，见 `ops.md「错误处理」`） |
+
+**错误文本是给 LLM 看的接口，不是给用户看的日志。** 它必须包含「哪个字段、期望什么、实际是什么」，因为 LLM 唯一的修正途径就是这段文本。
+
+### 7.6 操作留痕
+
+每次成功的写操作追加一行到 `logs/operations.jsonl`，格式见 `data.md「写入约定」`。
+
+**实现落点是工具层而不是数据层**：数据层的写函数不知道自己是被 LLM 还是被别的东西调用的，而留痕的语义是「LLM 对资料做了什么」。在工具层统一包一层，日志内容与工具调用一一对应，不会漏也不会重复。

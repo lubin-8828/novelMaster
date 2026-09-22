@@ -62,25 +62,28 @@ novelMaster 是一个跑在终端里的 AI 辅助小说写作工具，单人单�
 ## 开发速览
 
 ```bash
-npm install          # 装依赖（148 个包，无原生构建步骤）
+npm install          # 装依赖（无原生构建步骤）
 npm start            # 启动 TUI
-npm test             # 冒烟测试，不启动 TUI
-npm run typecheck    # tsc --noEmit，纯类型检查
+npm test             # 全部测试（354 项断言），不启动 TUI
+npm run typecheck    # tsc --noEmit，含 src/ 与 tests/，纯类型检查
 ```
 
-### 必须知道的四条
+### 必须知道的五条
 
 1. **没有构建步骤。** `node src/cli.ts` 直接跑，相对导入写显式 `.ts` 后缀。`tsc` 只做类型检查、不产出文件。
 2. **不能用 `enum` / `namespace` / 构造器参数属性。** Node 的类型剥离不做代码生成，写了会在运行时直接报错。
 3. **没有热更新。** 扩展是通过 `extensionFactories` 内联注册的，pi 的 `/reload` 不会重载它 —— 改完源码必须重启进程。
 4. **改动必须跑验证。** `npm run typecheck && npm test`，不要只靠手工点 TUI —— 手工点不可复现。
+5. **改数据结构先改 `src/data/schema.ts` 里的 typebox 定义。** 那里是数据结构的**唯一来源**，TS 类型由 `Static<>` 推导 —— 不要另外手写 interface。**新增对象必须写 `additionalProperties: false`**（typebox 默认允许额外属性，不写就等于放行字段名变体）。
 
-### 两条容易被踩的硬约束
+### 三条容易被踩的硬约束
 
 - **新命令名不得与 pi 内建命令冲突**（`/new` `/compact` `/quit` `/settings` `/model` `/reload` …）。撞名会被 pi 后缀化成 `/quit:1`，用户体验直接崩。`tests/smoke.ts` 里有机械校验，加了新命令跑测试即可发现。
 - **命令名与层面归属只改 `src/extension/layers.ts`**。该文件里 `COMMANDS`（命令自身）与 `LAYER_COMMAND_ORDER`（归属与顺序）是两张表，注册循环遍历 `COMMANDS` 的键 —— 不要改成按层面遍历注册，否则跨层命令会被重复注册。
+- **不要绕过工具直接写小说数据**。LLM 侧由护栏拦住了 `write`/`edit` 写小说根（shell 不在拦截范围内，见 `data.md「写入护栏」`）；人改代码时同样要遵守：所有落盘走 `src/data/*` 的写入函数，它们负责 schema 校验、ID 分配、追加式保行与操作留痕。直接 `writeFileSync` 拼一份 `index.json` 会绕过全部保证。
 
 ### 当前进度
 
-里程碑 1（骨架）已交付。里程碑 2（数据层 + 工具层）待开始。
+里程碑 1（骨架）与里程碑 2（数据层 + 工具层）已交付：19 个 `novel_*` 工具可用、写入护栏生效（拦 `write`/`edit` 写小说根，shell 保留）、354 项断言全过。
+里程碑 3（`/setting` `/person` 两层跑通）待开始。
 详见 `docs/design/ops.md「里程碑与实施进度」`。

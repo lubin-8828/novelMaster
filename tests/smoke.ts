@@ -1,12 +1,14 @@
 /**
- * 冒烟测试：不启动 TUI，验证数据层、扩展装配、提示词注入。
+ * 冒烟测试：扩展装配、层面表自检、数据层基础、提示词注入、文档一致性。
  *
- * 运行：node tests/smoke.ts
+ * 入口是 tests/all.ts（`npm test`）。
  */
 import { mkdirSync, readdirSync, rmSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { check, section } from "./harness.ts";
 import { novelMasterExtension } from "../src/extension/index.ts";
+import { TOOL_NAMES } from "../src/tools/index.ts";
 import { initNovel, isNovelRoot, slugify } from "../src/data/init.ts";
 import { openNovelAt } from "../src/data/novel.ts";
 import { writeConfig } from "../src/data/paths.ts";
@@ -28,23 +30,8 @@ import {
 
 const ROOT = join(process.cwd(), ".tmp-smoke");
 
-let failures = 0;
-function check(name: string, cond: boolean, detail?: string): void {
-  if (cond) {
-    console.log(`  ok    ${name}`);
-  } else {
-    failures++;
-    console.log(`  FAIL  ${name}${detail ? ` — ${detail}` : ""}`);
-  }
-}
-
-function section(title: string): void {
-  console.log(`\n${title}`);
-}
-
+export default async function run(): Promise<void> {
 /* ---------------- 1. 扩展装配 ---------------- */
-
-section("扩展装配");
 
 interface CapturedCommand {
   name: string;
@@ -52,11 +39,15 @@ interface CapturedCommand {
 }
 
 const registered: CapturedCommand[] = [];
+const registeredToolNames: string[] = [];
 const handlers = new Map<string, Array<(event: unknown, ctx: unknown) => unknown>>();
 
 const mockPi = {
   registerCommand: (name: string, options: { description?: string }) => {
     registered.push({ name, description: options.description });
+  },
+  registerTool: (tool: { name: string }) => {
+    registeredToolNames.push(tool.name);
   },
   on: (event: string, handler: (event: unknown, ctx: unknown) => unknown) => {
     const list = handlers.get(event) ?? [];
@@ -69,6 +60,7 @@ const mockPi = {
 
 novelMasterExtension(mockPi);
 
+section("扩展装配");
 const registeredNames = registered.map((c) => c.name);
 const registeredSet = new Set(registeredNames);
 check(
@@ -287,12 +279,21 @@ for (const [label, marker] of RULE_MARKERS) {
 const interaction = readText(join(BASE, "docs", "design", "interaction.md")) ?? "";
 for (const name of ALL_COMMANDS) {
   check(`interaction.md 记录了 /${name}`, interaction.includes(`\`/${name}\``));
-}
-const docCommands = [...interaction.matchAll(/^\| `\/([a-z-]+)/gm)].map((m) => m[1]);
+}const docCommands = [...interaction.matchAll(/^\| `\/([a-z-]+)/gm)].map((m) => m[1] ?? "");
 const extraInDoc = [...new Set(docCommands)].filter(
   (n) => !(ALL_COMMANDS as string[]).includes(n) && !PI_BUILTINS.has(n),
 );
 check("interaction.md 没有代码里不存在的命令", extraInDoc.length === 0, `多余：${extraInDoc.join(", ")}`);
+
+// 工具名：data.md 的工具表必须与代码注册的 novel_* 工具完全对应。
+// 与上面命令表同构的理由：「LLM 能调哪些工具」不能有两份不同的事实。
+const dataDoc = readText(join(BASE, "docs", "design", "data.md")) ?? "";
+for (const name of TOOL_NAMES) {
+  check(`data.md 记录了 ${name}`, dataDoc.includes(`\`${name}\``));
+}
+const docTools = [...dataDoc.matchAll(/^\| `(novel_[a-z_]+)`/gm)].map((m) => m[1] ?? "");
+const extraTools = [...new Set(docTools)].filter((n) => !(TOOL_NAMES as string[]).includes(n));
+check("data.md 没有代码里不存在的工具", extraTools.length === 0, `多余：${extraTools.join(", ")}`);
 
 // 代码 → 文档：src/ 下每个源文件都必须在架构文档的源码树里出现。
 const architecture = readText(join(BASE, "docs", "design", "architecture.md")) ?? "";
@@ -332,8 +333,4 @@ for (const name of SUB_DOCS) checkLinks(join(BASE, "docs", "design", `${name}.md
 check("文档链接无死链", deadLinks === 0, `${deadLinks} 条`);
 
 rmSync(ROOT, { recursive: true, force: true });
-
-/* ---------------- 结果 ---------------- */
-
-console.log(`\n${failures === 0 ? "全部通过" : `${failures} 项失败`}`);
-process.exit(failures === 0 ? 0 : 1);
+}

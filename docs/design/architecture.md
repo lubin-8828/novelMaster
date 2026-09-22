@@ -49,7 +49,8 @@ UI 形态受 pi 约束：输入框是 pi 的编辑器，命令必须以 `/` 开�
 | 每层只装载该层数据 | `pi.on("before_agent_start", …)` 改 `event.systemPromptOptions.sections` | pi 只把**变化的部分**作为补丁追加（省 token + 保留前缀缓存）。整体替换 `systemPrompt` 会丢缓存 |
 | 每章清空上下文 | `ctx.newSession({ parentSession, setup, withSession })` | **只在命令处理器里可用**，事件处理器里调用会死锁 |
 | 一次性子 agent | `createAgentSession({ sessionManager: SessionManager.inMemory(), tools, customTools, resourceLoader })` | 用完必须 `dispose()` |
-| 结构化产出 | `defineTool` + typebox `Type.Object` | 工具参数走 schema 校验，模型无法用「看起来像 JSON 的散文」绕过 |
+| 结构化产出 | `pi.registerTool` + typebox `Type.Object` | 工具参数走 schema 校验，模型无法用「看起来像 JSON 的散文」绕过。需要在数组里传递工具定义时用导出的 `defineTool` 包一层以保留类型推导 |
+| 写入护栏 | `pi.on("tool_call")` 返回 `{ block: true }` | 拦 `write`/`edit` 写小说根，把 LLM 导向 `novel_*` 工具。**不动 `bash`** —— 关 shell 的代价大于那条旁路的风险（见 `data.md「写入护栏」`） |
 | 自定义对话框 | `ctx.ui.select` / `confirm` / `input` / `editor` / `custom` | `ctx.ui.custom` 仅 `ctx.mode === "tui"` 可用 |
 | 状态栏 | `ctx.ui.setStatus(key, text)` | key 固定为 `novelmaster` |
 | 模型 | `ModelRuntime.create()` / `resolveCliModel()` | 默认读 `~/.pi/agent/settings.json` |
@@ -66,8 +67,8 @@ UI 形态受 pi 约束：输入框是 pi 的编辑器，命令必须以 `/` 开�
 | **流程层**（`pipeline.md`） | 章状态机、审查编排、回填闸门 | 不碰文件格式 |
 | **上下文装配器**（`src/ai/context-assembler.ts`） | 把磁盘数据装成上下文包 | 不知道谁调用它 |
 | **AI 层**（`src/ai/`） | 会话工厂、子 agent 拓扑、提示词 | 不做文件 I/O 决策 |
-| **工具层**（`src/tools/`） | LLM **唯一**的数据写入口（schema 校验 + 原子写 + ID 分配） | 不做业务判断 |
-| **数据层**（`src/data/`） | schema、读写、路径、校验 | 不感知 AI |
+| **工具层**（`src/tools/`） | LLM 的**规范**数据写入口（schema 校验 + 原子写 + ID 分配 + 操作留痕）；同时是写入护栏的执行体 | 不做业务判断 |
+| **数据层**（`src/data/`） | typebox schema、读写、路径、ID 分配、状态转移表、校验 | 不感知 AI |
 
 **单向依赖**：命令 → 流程 → 装配器/AI → 工具 → 数据。反向调用一律视为设计错误。
 
@@ -81,21 +82,30 @@ novelMaster/
 ├── src/
 │   ├── cli.ts                    # 组装 runtime + InteractiveMode
 │   ├── extension/
-│   │   ├── index.ts              # 扩展工厂：装载命令与提示词
+│   │   ├── index.ts              # 扩展工厂：装载命令、提示词、工具与护栏
 │   │   ├── layers.ts             # 层面定义 + 命令表 + 当前层面状态
 │   │   ├── commands.ts           # 命令注册与实现
 │   │   ├── render.ts             # /help、层面段、项目段、状态栏的文本渲染
 │   │   └── prompt-sections.ts    # before_agent_start 注入
 │   ├── data/
-│   │   ├── paths.ts              # 根目录解析、文件名常量、应用配置
-│   │   ├── schema.ts             # 数据模型的类型定义
+│   │   ├── paths.ts              # 根目录解析、文件名常量与路径构造、应用配置
+│   │   ├── errors.ts             # DataError（错误文本面向 LLM）
+│   │   ├── schema.ts             # typebox 定义 + Static 推导的类型 + 校验辅助
 │   │   ├── io.ts                 # 原子写、追加写、JSON 读写
+│   │   ├── doc.ts                # 带 schema 校验的文档读写 + 追加式数组断言
+│   │   ├── md.ts                 # md 区段追加/替换、保行断言、文档合成
+│   │   ├── ids.ts                # ID 分配与永不复用、章节号补零
+│   │   ├── log.ts                # operations.jsonl 操作留痕
+│   │   ├── state.ts              # 章状态机转移表 + 状态更新校验
 │   │   ├── init.ts               # 新建一本小说（目录树 + 初始文件 + slug）
-│   │   ├── novel.ts              # 打开小说（读 meta + state）
-│   │   ├── ids.ts                # ID 分配与永不复用              ← 里程碑 2
-│   │   ├── settings.ts  characters.ts  relations.ts  events.ts  chapters.ts
+│   │   ├── novel.ts              # 打开小说（宽容版 / 严格版）
+│   │   ├── settings.ts  characters.ts  relations.ts  events.ts  chapters.ts  inbox.ts
 │   │   └── validate.ts           # 依据引用校验                  ← 里程碑 8
-│   ├── tools/                    # pi custom tools（LLM 写入口）  ← 里程碑 2
+│   ├── tools/                    # pi custom tools（LLM 唯一写入口）
+│   │   ├── index.ts              # 注册全部 novel_* 工具
+│   │   ├── guard.ts              # 护栏：拦 write/edit 写小说根（不动 shell）
+│   │   ├── helper.ts             # withNovel / 错误文本 / 留痕封装 / 失败计数
+│   │   └── read.ts  setting.ts  character.ts  relation.ts  outline.ts  event.ts  chapter.ts  state.ts  inbox.ts
 │   ├── ai/
 │   │   ├── session-factory.ts    # 主会话 / 只读子会话            ← 里程碑 7
 │   │   ├── models.ts             # 按用途取模型                  ← 里程碑 7
@@ -104,12 +114,21 @@ novelMaster/
 │   │   ├── deai/                 # 去 AI 味引擎                  ← 里程碑 9
 │   │   └── brainstorm/           # 多 agent 脑暴                 ← 里程碑 11
 │   └── prompts/                  # 各角色 system prompt 模板      ← 里程碑 4
-├── tests/smoke.ts                # 冒烟测试（不启动 TUI）
+├── tests/
+│   ├── harness.ts                # check / section / 失败计数
+│   ├── all.ts                    # 测试入口（npm test）
+│   ├── smoke.ts                  # 扩展装配、层面表、提示词注入、文档一致性
+│   ├── data.ts                   # 数据层（schema / ID / 追加式 / 状态机）
+│   └── tools.ts                  # 工具层与写入护栏
 ├── docs/design/                  # 设计子文档
 └── novels/                       # 默认小说根目录（git 忽略）
 ```
 
 标注 `← 里程碑 N` 的目录/文件尚未创建，属于规划。已交付内容见 `ops.md「实施进度」`。
+
+**测试为何拆四个文件。** 里程碑 2 之后断言数会从 112 涨到 300 量级，全塞进一个文件会轻易过千行。拆分的界跟源码一致：`data.ts` 对应 `src/data/`，`tools.ts` 对应 `src/tools/`，`smoke.ts` 管装配与文档一致性。`harness.ts` 提供共享的 `check`/`section`，`all.ts` 是唯一入口并负责 `process.exit`。
+
+**继续不用测试框架。** `node:test` 是内建的、零依赖，但本项目的断言全是「比较两个已知值」和「断言抛不抛错」，框架提供的 fixture / mock / 并发调度在这里没有用武之地。多一层框架就多一层「断言为什么没跑」的可能。
 
 ---
 
@@ -133,7 +152,7 @@ novelMaster/
 | 依赖/API | 用途 | 文档地址 |
 |----------|------|----------|
 | `@earendil-works/pi-coding-agent` (v0.86.1) | Agent 运行时、会话管理、TUI 宿主、扩展 API | pi 安装目录下 `docs/sdk.md`、`docs/extensions.md`、`docs/tui.md` |
-| `typebox` (1.3.27) | 自定义工具的参数字典与数据结构校验 | 与 pi 的 `defineTool` 配套使用；pi 自身也用同一版本 |
+| `typebox` (1.3.27) | **数据结构的唯一定义源**：`Type.Object` 定义 → `Static<>` 推导 TS 类型 → `Value.Check` 运行时校验；自定义工具的参数字典也用它 | 与 pi 的 `registerTool` 配套；pi 自身也用同一版本。**每个对象必须显式写 `additionalProperties: false`** —— 默认是允许额外属性的 |
 | Node.js >= 22.19 | 运行时 + 原生 TS 类型剥离 | https://nodejs.org/api/typescript.html |
 | TypeScript ^5.9 | 仅类型检查 | https://www.typescriptlang.org/docs/ |
 
@@ -156,7 +175,7 @@ npm install          # 148 个包，无原生模块构建步骤
 | 命令 | 作用 |
 |------|------|
 | `npm start` | 启动 TUI（等价 `node src/cli.ts`） |
-| `npm test` | 冒烟测试，不启动 TUI |
+| `npm test` | 全部测试（等价 `node tests/all.ts`），不启动 TUI |
 | `npm run typecheck` | `tsc --noEmit`，纯类型检查 |
 
 ### 7.3 调试方法
@@ -165,7 +184,8 @@ npm install          # 148 个包，无原生模块构建步骤
 |------|------|
 | 看扩展有没有加载 | 启动横幅的 `[Extensions]` 段应出现 `<inline:novelmaster>` |
 | 看当前层面 | 状态栏应显示 `【主菜单】` / `【大纲】` / `【写作】…` |
-| 验证数据层改动 | 在 `tests/smoke.ts` 加断言，而不是手工点 TUI —— 手工点不可复现 |
+| 验证数据层改动 | 在 `tests/data.ts` 加断言，而不是手工点 TUI —— 手工点不可复现 |
+| 验证工具与护栏 | 在 `tests/tools.ts` 加断言：直接调工具的 `execute()`，再用捕获到的 `tool_call` 处理器验护栏，全程不经模型、零成本 |
 | 验证提示词注入 | 冒烟测试直接调用捕获到的 `before_agent_start` 处理器，断言 `systemPromptOptions.sections` 的内容（无需调用模型，零成本） |
 | 非 TTY 环境试启动 | `timeout 15 node src/cli.ts < /dev/null` —— pi 能在无 TTY 下渲染，可用来确认启动链路没断 |
 | 看会话落盘 | `~/.pi/agent/sessions/` 下按 cwd 分目录的 `.jsonl` |

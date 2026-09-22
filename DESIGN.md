@@ -115,6 +115,8 @@ novelMaster 是一个跑在终端里的 AI 辅助小说写作工具，单人单�
 | 资料格式 | markdown / JSON（不受纯文本约束）—— 这是审查「有据可查」的前提 |
 | 唯一进度真相 | `<小说根>/state.json`，章状态不得在别处重复记录 |
 | 原子写 | 所有写入走「临时文件 + rename + fsync」（`src/data/io.ts`） |
+| 数据结构定义 | 只有 `src/data/schema.ts` 一处（typebox 定义），TS 类型由 `Static<>` 推导；新对象必须写 `additionalProperties: false` |
+| LLM 写入口 | 走 `novel_*` 工具；`write`/`edit` 写小说根被阻断（`src/tools/guard.ts`）。shell 保留，是已知旁路 |
 | ID 分配 | 读 `index.json` 最大序号 + 1，**不回填空号** |
 
 ### 3.4 依据引用格式
@@ -151,7 +153,7 @@ novelMaster/
 ├── docs/design/                  # 设计子文档（见 §5 导航索引）
 ├── bin/novelmaster.mjs           # 可执行入口
 ├── src/                          # 源码（结构见 docs/design/architecture.md）
-├── tests/smoke.ts                # 冒烟测试（不启动 TUI）
+├── tests/                        # 测试：all.ts 是入口（npm test），smoke.ts / data.ts / tools.ts 是三个套件
 ├── package.json / tsconfig.json / .gitignore
 ├── novels/                       # 默认小说根目录（git 忽略）
 └── .novelmaster/config.json      # 当前打开的小说（git 忽略）

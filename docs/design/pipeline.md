@@ -41,7 +41,33 @@ accepted  → 清空上下文 → 询问是否写下一章
 
 - 状态存在 `state.json` 的 `chapterStatus`（唯一进度真相）。
 - **正向线性推进，回退只能由用户触发。**
-- 转移合法性由 `novel_state_update` 工具校验，非法转移直接被拒绝（见 `data.md「状态转移校验」`）。
+- 转移合法性由 `novel_state_update` 工具校验，非法转移直接被拒绝（见 `data.md「状态转移校验」`）。非法转移的错误文本里必须包含「当前状态、目标状态、当前允许的几个目标」，否则 LLM 无法自我修正。
+
+### 1.1 转移表（唯一来源）
+
+下面这张表是「哪些转移合法」的**唯一来源**，实现于 `src/data/state.ts`。图是给人看的，表是给代码用的 —— 两者不一致时以表为准并修正图。
+
+| 从 | 到 | 触发者 |
+|----|----|--------|
+| `not_started` | `outlined` | 用户在 `/next` 的确认循环里说通过 |
+| `outlined` | `drafted` | 正文生成成功并落盘 |
+| `drafted` | `auto_reviewed` | 自动审查完成 |
+| `auto_reviewed` | `deai_done` | 自动去 AI 味完成 |
+| `deai_done` | `awaiting_user_review` | 自动进入（两份报告此时推到用户面前） |
+| `awaiting_user_review` | `user_edited` | 用户手改 txt 后告知 |
+| `awaiting_user_review` | `ai_revised` | 用户让 AI 改稿 |
+| `awaiting_user_review` | `reflowed` | 用户未改稿，直接回填 |
+| `user_edited` | `reflowed` | 回填完成 |
+| `ai_revised` | `auto_reviewed` | 改稿后重跑审查完成 |
+| `reflowed` | `awaiting_user_review` | 用户继续改稿（回到验收） |
+| `reflowed` | `accepted` | `/done` 闸门通过 |
+| `accepted` | `not_started` | 开下一章（同时 `currentChapter + 1`） |
+
+三条容易被「补全」掉的规则，写在这里以免被当成漏项：
+
+1. **同状态转移一律拒绝**（如 `drafted → drafted`）。状态转移是一条边，不是「设为某值」。同状态重复转移说明调用方逻辑有误 —— 静默成功会把这个 bug 藏起来。
+2. **`awaiting_user_review → reflowed` 是合法边，且不要求经过 `user_edited`。** 回填的意义是把本章进展落到资料层，它跟用户改没改正文无关；强制「必须先改稿才能回填」会逼用户做一次无意义的保存。
+3. **`ai_revised → auto_reviewed`，不是直接回 `awaiting_user_review`。** 中间的 `auto_reviewed` / `deai_done` 是必经的两步：AI 改的是正文，改过的正文还没被审查过，直接跳回「待验收」等于告诉用户「这一版审查过了」—— 而那是假的。
 
 ---
 
