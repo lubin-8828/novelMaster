@@ -129,7 +129,7 @@ export const COMMANDS: Record<CmdName, CommandMeta> = {
   [CMD.outline]: { desc: "进入大纲层" },
   [CMD.event]: { desc: "进入事件层" },
   [CMD.write]: { desc: "进入写作模式" },
-  [CMD.context]: { desc: "打印本章上下文包（喂给 AI 了什么）", milestone: 6 },
+  [CMD.context]: { desc: "打印本章上下文包（喂给 AI 了什么）" },
   [CMD.next]: { desc: "推演下一章大纲，交你确认", milestone: 7 },
   [CMD.review]: { desc: "审查（章末自动触发，也可手动补跑）", milestone: 8 },
   [CMD.deai]: { desc: "去 AI 味（章末自动触发，也可手动补跑）", milestone: 9 },

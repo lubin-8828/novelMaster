@@ -19,7 +19,7 @@ import {
   chapterSummaryPath,
   chapterTextPath,
 } from "./paths.ts";
-import { applySectionOps, chapterLine, composeDoc, readSectionLines, stamp, stripSection } from "./md.ts";
+import { applySectionOps, chapterLine, composeDoc, readSection, readSectionLines, stamp, stripSection } from "./md.ts";
 import { readDocOrNull, writeDoc } from "./doc.ts";
 import { chapterNo } from "./ids.ts";
 import { DataError } from "./errors.ts";
@@ -237,4 +237,70 @@ export function readChapterOutline(root: string, chapter: number): string {
   const text = readText(chapterOutlinePath(root, chapter));
   if (text === null) throw new DataError(`第 ${chapter} 章还没有大纲文件`);
   return text;
+}
+
+/* ---------- 伴生文件的解析 ---------- */
+
+/** 章节大纲开头的结构化头块。 */
+export interface OutlineHeader {
+  characters: string[];
+  settings: string[];
+  events: string[];
+  primaryEvent: string | null;
+}
+
+/**
+ * 解析章节大纲开头的结构化头块（`<!-- novelmaster:outline ... -->`）。
+ *
+ * 解析失败返回 null，**不报错**。头块是「尽力而为」的输入：手写的大纲、或按老格式
+ * 写的大纲没有它，而缺了它只意味着相关性判定少一个来源（另外两个是主事件与
+ * 最近章节摘要）。报错会让一份本来能用的上下文变得完全不可用 —— 代价不对等。
+ */
+export function readOutlineHeader(markdown: string): OutlineHeader | null {
+  const matched = /<!--\s*novelmaster:outline([\s\S]*?)-->/.exec(markdown);
+  if (matched === null) return null;
+  const body = matched[1] ?? "";
+
+  const list = (key: string): string[] => {
+    const line = new RegExp(`^${key}:\\s*\\[(.*?)\\]`, "m").exec(body);
+    if (line === null) return [];
+    return (line[1] ?? "")
+      .split(",")
+      .map((item) => item.trim())
+      .filter((item) => item !== "");
+  };
+  const primary = /^primaryEvent:\s*(\S+)/m.exec(body);
+
+  return {
+    characters: list("characters"),
+    settings: list("settings"),
+    events: list("events"),
+    primaryEvent: primary === null ? null : (primary[1] ?? null),
+  };
+}
+
+/** 从章节摘要读出的出场清单。 */
+export interface SummaryAppearances {
+  characters: string[];
+  settings: string[];
+}
+
+/**
+ * 从章节摘要的「## 出场」小节读出人物与地点 ID。
+ *
+ * 只认固定格式（`- 人物：C-001 李明、C-002 张局`）—— 小节标题与行的形状都是
+ * `novel_chapter_summary_write` 写死的（见 docs/design/data.md）。
+ *
+ * 读不到就返回空数组：这是相关性判定的三个来源之一，不值得为它报错。
+ *
+ * **不从正文里找人物名** —— 那等于做实体识别，会把「张局」与「张局长」算成两个人。
+ */
+export function readSummaryAppearances(summary: string): SummaryAppearances {
+  const section = readSection(summary, "出场") ?? [];
+  const idsAfter = (label: string): string[] => {
+    const line = section.find((entry) => entry.trim().startsWith(`- ${label}：`));
+    if (line === undefined) return [];
+    return [...line.matchAll(/([SCE])-\d{3,}/g)].map((matched) => matched[0] ?? "");
+  };
+  return { characters: idsAfter("人物"), settings: idsAfter("地点") };
 }

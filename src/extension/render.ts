@@ -1,5 +1,8 @@
 import { LAYERS, commandsForLayer, type Layer, type ResolvedCommand } from "./layers.ts";
 import type { ChapterStatus } from "../data/schema.ts";
+import type { ContextBundle, Segment } from "../ai/context-assembler.ts";
+import { charCount, padDisplay, padDisplayStart } from "../ai/tokens.ts";
+import { chapterNo } from "../data/ids.ts";
 
 /** 章状态的中文标签。放在这里而不是散在代码里，保证状态栏与报告口径一致。 */
 export const CHAPTER_STATUS_LABEL: Record<ChapterStatus, string> = {
@@ -35,6 +38,74 @@ export function renderLayerSection(layer: Layer): string {
     "",
     `本层当前已实现的命令：${cmds}`,
   ].join("\n");
+}
+
+/** 每段在 `/context` 里默认展开的行数。 */
+export const CONTEXT_PREVIEW_LINES = 12;
+
+/**
+ * `/context` 的输出。
+ *
+ * 两步：先一张总表（每段多大、来自哪），再按段展开。
+ * 总表回答「这章上下文多大、大在哪」，展开回答「它具体给了我什么」。
+ *
+ * `focus` 给出时只展开那一段的**全文**（按序号 / key / 标题匹配）。
+ * 要逐字看某段又不想敲参数时，直接 `read` 那个来源文件即可 —— 内容本来就来自磁盘。
+ */
+export function renderContext(bundle: ContextBundle, focus?: string, previewLines = CONTEXT_PREVIEW_LINES): string {
+  const totalChars = bundle.segments.reduce((sum, item) => sum + charCount(item.content), 0);
+  const head = [
+    `本章上下文包（第 ${chapterNo(bundle.chapter)} 章）—— ${bundle.segments.length} 段，` +
+      `共约 ${bundle.totalEstimatedTokens} tokens（${totalChars} 字）`,
+    "",
+  ];
+
+  bundle.segments.forEach((item, index) => {
+    const number = padDisplayStart(String(index + 1), 2);
+    const title = padDisplay(item.title, 16);
+    const tokens = padDisplayStart(String(item.estimatedTokens), 6);
+    const chars = padDisplayStart(String(charCount(item.content)), 7);
+    head.push(`  ${number}. ${title} 约${tokens} tokens（${chars} 字）  ${sourceLabel(item)}`);
+  });
+
+  if (focus !== undefined && focus !== "") {
+    const picked = pickSegment(bundle.segments, focus);
+    if (picked === null) {
+      return [
+        ...head,
+        "",
+        `没有匹配「${focus}」的段。可用的段：`,
+        ...bundle.segments.map((item, index) => `  ${index + 1}. ${item.key}（${item.title}）`),
+      ].join("\n");
+    }
+    return [...head, "", `【${picked.title}】（全文）`, "", picked.content].join("\n");
+  }
+
+  bundle.segments.forEach((item, index) => {
+    const all = item.content.split("\n");
+    head.push("", `【${index + 1}】${item.title}`, "");
+    head.push(...all.slice(0, previewLines));
+    if (all.length > previewLines) {
+      head.push(`…（共 ${all.length} 行，只显示前 ${previewLines} 行；用 /context ${item.key} 看全文）`);
+    }
+  });
+
+  return head.join("\n");
+}
+
+function sourceLabel(item: Segment): string {
+  if (item.sources.length === 0) return "（无来源）";
+  const first = item.sources[0] ?? "";
+  return item.sources.length === 1 ? first : `${first} 等 ${item.sources.length} 个`;
+}
+
+/** 按序号 / key / 标题匹配段。序号从 1 开始，与总表一致。 */
+function pickSegment(segments: readonly Segment[], focus: string): Segment | null {
+  const index = Number(focus);
+  if (Number.isInteger(index) && index >= 1 && index <= segments.length) {
+    return segments[index - 1] ?? null;
+  }
+  return segments.find((item) => item.key === focus || item.title === focus) ?? null;
 }
 
 /** 注入系统提示词的项目段。描述小说数据布局与硬规则。 */

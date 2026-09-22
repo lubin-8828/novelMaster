@@ -113,10 +113,11 @@ novelMaster/
 │   ├── ai/                       # AI 层：会话、模型、编排。不做文件 I/O 决策
 │   │   ├── models.ts             # 按用途取模型（draft / review / brainstorm）
 │   │   ├── session.ts            # 只读子会话工厂
+│   │   ├── tokens.ts             # token 估算（CJK 按字算，不按字符 /4）
+│   │   ├── context-assembler.ts  # 上下文装配器（本项目的中枢）
 │   │   ├── brainstorm/           # 多 agent 讨论（脑暴）
 │   │   │   ├── index.ts          # 编排：并发起角色、收集产出、失败处置
 │   │   │   └── input.ts          # 角色输入包（基线 + 视角）
-│   │   ├── context-assembler.ts  # 上下文装配器                  ← 里程碑 6
 │   │   ├── review/               # 审查引擎                      ← 里程碑 8
 │   │   └── deai/                 # 去 AI 味引擎                  ← 里程碑 9
 │   └── prompts/                  # 各角色 system prompt 模板      ← 里程碑 4
@@ -125,6 +126,7 @@ novelMaster/
 │   ├── all.ts                    # 测试入口（npm test）
 │   ├── smoke.ts                  # 扩展装配、层面表、提示词注入、文档一致性
 │   ├── layers.ts                 # 层面数据装载与进层面时的用户清单
+│   ├── context.ts                # 上下文装配器与 /context 输出
 │   ├── data.ts                   # 数据层（schema / ID / 追加式 / 状态机）
 │   └── tools.ts                  # 工具层与写入护栏
 ├── docs/design/                  # 设计子文档

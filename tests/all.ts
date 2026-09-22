@@ -11,11 +11,13 @@ import runLayers from "./layers.ts";
 import runData from "./data.ts";
 import runTools from "./tools.ts";
 import runBrainstorm from "./brainstorm.ts";
+import runContext from "./context.ts";
 
 await runSmoke();
 await runLayers();
 runData();
 await runTools();
 await runBrainstorm();
+runContext();
 
 finish();

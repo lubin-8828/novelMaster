@@ -1,7 +1,9 @@
 import type { ExtensionAPI, ExtensionContext, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { CMD, ENTRY_LAYERS, LAYERS, ALL_COMMANDS, COMMANDS, getLayer, setLayer, type CmdName, type Layer } from "./layers.ts";
-import { renderHelp, renderStatus } from "./render.ts";
+import { renderContext, renderHelp, renderStatus } from "./render.ts";
 import { renderLayerData, safeLayerData } from "./layer-data.ts";
+import { assemble } from "../ai/context-assembler.ts";
+import { errorText } from "../data/errors.ts";
 import { openNovel } from "../data/novel.ts";
 import { defaultNovelRoot, writeConfig } from "../data/paths.ts";
 import { initNovel, slugify } from "../data/init.ts";
@@ -54,6 +56,26 @@ export function registerCommands(pi: ExtensionAPI): void {
       setLayer("menu");
       refreshStatus(ctx);
       ctx.ui.notify("已返回主菜单。", "info");
+    },
+  });
+
+  pi.registerCommand(CMD.context, {
+    description: "打印本章上下文包（每段的 token 估算 + 来源）",
+    handler: async (args, ctx) => {
+      const novel = openNovel(ctx.cwd);
+      if (novel === null) {
+        ctx.ui.notify("还没有打开小说。先用 /init 新建一本。", "warning");
+        return;
+      }
+      const chapter = novel.state.currentChapter;
+      try {
+        const bundle = assemble(novel, chapter);
+        const focus = args.trim();
+        emit(pi, "novelmaster-context", renderContext(bundle, focus === "" ? undefined : focus));
+      } catch (err) {
+        // 装配失败要说清原因：这里读七八个文件，静默失败会让用户以为「这份上下文就是空的」。
+        ctx.ui.notify(`装配上下文失败：${errorText(err)}`, "error");
+      }
     },
   });
 
