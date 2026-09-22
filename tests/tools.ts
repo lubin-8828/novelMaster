@@ -81,7 +81,7 @@ export default async function run(): Promise<void> {
 
   novelMasterExtension(pi);
 
-  check("注册了 22 个 novel_* 工具", TOOL_NAMES.length === 22, `实际 ${TOOL_NAMES.length}：${TOOL_NAMES.join(", ")}`);
+  check("注册了 23 个 novel_* 工具", TOOL_NAMES.length === 23, `实际 ${TOOL_NAMES.length}：${TOOL_NAMES.join(", ")}`);
   check("工具名无重复", new Set(TOOL_NAMES).size === TOOL_NAMES.length);
   check("工具名都以 novel_ 开头", TOOL_NAMES.every((name) => name.startsWith("novel_")));
   check("注册了 tool_call 护栏钩子", handlers.has("tool_call"));

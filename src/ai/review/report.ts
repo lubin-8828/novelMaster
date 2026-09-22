@@ -14,6 +14,8 @@ import { countFindings, type Finding } from "./merge.ts";
 
 export interface ReviewReportInput {
   chapter: number;
+  /** `full` = 完整审查；`post-deai` = 改稿复查（只覆盖 F / G）。 */
+  mode?: "full" | "post-deai" | undefined;
   findings: readonly Finding[];
   /** 实际参与并产出的审查员名。 */
   reviewers: readonly string[];
@@ -24,14 +26,24 @@ export interface ReviewReportInput {
 
 export function renderReviewReport(input: ReviewReportInput): string {
   const stats = countFindings(input.findings);
+  const postDeai = input.mode === "post-deai";
   const lines: string[] = [
-    `# 第 ${chapterNo(input.chapter)} 章 审查报告`,
+    `# 第 ${chapterNo(input.chapter)} 章 审查报告${postDeai ? "（改稿复查）" : ""}`,
     "",
     `- 生成：${input.generatedAt ?? stamp()}`,
     `- 审查员：${input.reviewers.join(" / ")}（独立会话）`,
     `- 统计：blocking ${stats.blocking} ｜ warning ${stats.warning} ｜ note ${stats.note} ｜ 依据无效 ${stats.invalidEvidence}`,
     "",
   ];
+
+  // **必须标明覆盖范围**：不标的话，用户会以为这份报告和第一份一样全，而那是假的。
+  if (postDeai) {
+    lines.push(
+      "- **覆盖范围**：本次只覆盖 F（逻辑与叙事）与 G（硬性规范） —— 去 AI 味只动表达层，",
+      "  事实层（设定 / 人物 / 关系 / 事件 / 时间线）未被重查。要全查请跑 `/review`。",
+      "",
+    );
+  }
 
   if (input.missing.length > 0) {
     lines.push(`- **未产出**：${input.missing.map((item) => `${item.name}（${item.detail}）`).join("；")}`, "");

@@ -64,7 +64,7 @@ novelMaster 是一个跑在终端里的 AI 辅助小说写作工具，单人单�
 ```bash
 npm install          # 装依赖（无原生构建步骤）
 npm start            # 启动 TUI
-npm test             # 全部测试（709 项断言），不启动 TUI
+npm test             # 全部测试（771 项断言），不启动 TUI
 npm run typecheck    # tsc --noEmit，含 src/ 与 tests/，纯类型检查
 ```
 
@@ -84,6 +84,13 @@ npm run typecheck    # tsc --noEmit，含 src/ 与 tests/，纯类型检查
 
 ### 当前进度
 
-里程碑 1–8 已交付：**闭环已到「审查」**（推演大纲 → 确认 → 生成正文 → 落盘 → 自动审查 → 报告落盘），审查引擎真实跑通并抓出埋的问题与一条幻觉引用。709 项断言全过。
-里程碑 9（去 AI 味引擎）待开始。
+**11 个里程碑全部交付。** 主链路完整可用：
+
+```
+/init → /outline → /event → /write → /next → 生成正文 → 审查 → 去 AI 味
+  → 用户验收 → 回填 → /done → 清空上下文 → 下一章
+```
+
+23 个 `novel_*` 工具注册给主会话（另有 3 个子会话专用）、写入护栏生效、上下文装配器可检查、771 项断言全过。
+下一步是真实写一章的端到端验收（`docs/design/ops.md「手工」`的 61–91 项）。
 详见 `docs/design/ops.md「里程碑与实施进度」`。

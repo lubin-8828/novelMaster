@@ -9,7 +9,11 @@
  */
 
 import { DataError } from "./errors.ts";
-import type { ChapterStatus } from "./schema.ts";
+import { NAMES, statePath } from "./paths.ts";
+import { writeDoc } from "./doc.ts";
+import { openNovelAt } from "./novel.ts";
+import { syncChapterStatus } from "./chapters.ts";
+import { NovelStateSchema, type ChapterStatus } from "./schema.ts";
 
 export const TRANSITIONS: Record<ChapterStatus, readonly ChapterStatus[]> = {
   not_started: ["outlined"],
@@ -30,6 +34,47 @@ export const TRANSITIONS: Record<ChapterStatus, readonly ChapterStatus[]> = {
 
 export function canTransition(from: ChapterStatus, to: ChapterStatus): boolean {
   return TRANSITIONS[from].includes(to);
+}
+
+/**
+ * 开始下一章：仅当上一章已 `accepted`。
+ *
+ * 与 `advanceStatus` 分开，因为它连章号一起推 —— 而「下一章开始了吗」是独立于
+ * 「上一章结了吗」的另一个事实（用户 `/done` 之后可能今天就停下）。
+ *
+ * 同时清掉 `currentEventId`：那是**上一章**的主事件，不带到新章。
+ */
+export function startNextChapter(root: string): number | null {
+  const fresh = openNovelAt(root);
+  if (fresh === null || fresh.state.chapterStatus !== "accepted") return null;
+  assertTransition("accepted", "not_started");
+  const next = fresh.state.currentChapter + 1;
+  writeDoc(
+    statePath(root),
+    NovelStateSchema,
+    { ...fresh.state, currentChapter: next, chapterStatus: "not_started", currentEventId: null },
+    NAMES.state,
+  );
+  syncChapterStatus(root, next, "not_started");
+  return next;
+}
+
+/**
+ * 按「当前状态必须等于 `from`」推进到 `to`；不符就**什么都不做**。
+ *
+ * 为什么每次都重新读盘：调用方手里的 `novel` 是快照。流水线里一次工具调用可能连推两步
+ * （如 `auto_reviewed → deai_done → awaiting_user_review`），拿旧快照判断会把第二步挡掉。
+ *
+ * 「不等就跳过」而非报错，是为手动补跑：`/review`、`/deai` 可以在任意状态下跑，
+ * 那时只产出报告、不改状态。
+ */
+export function advanceStatus(root: string, chapter: number, from: ChapterStatus, to: ChapterStatus): boolean {
+  const fresh = openNovelAt(root);
+  if (fresh === null || fresh.state.chapterStatus !== from) return false;
+  assertTransition(from, to);
+  writeDoc(statePath(root), NovelStateSchema, { ...fresh.state, chapterStatus: to }, NAMES.state);
+  syncChapterStatus(root, chapter, to);
+  return true;
 }
 
 /**

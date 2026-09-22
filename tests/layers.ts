@@ -22,11 +22,19 @@ import { writeConfig } from "../src/data/paths.ts";
 import { statePath } from "../src/data/paths.ts";
 import { readDoc, writeDoc } from "../src/data/doc.ts";
 import { NovelStateSchema } from "../src/data/schema.ts";
+import { writeChapterSummary } from "../src/data/chapters.ts";
 
 const ROOT = join(process.cwd(), ".tmp-layers");
 
-function makeCtx(cwd: string): ExtensionContext {
-  return { cwd, ui: { setStatus: () => {}, notify: () => {} } } as unknown as ExtensionContext;
+function makeCtx(cwd: string, onNewSession?: () => void): ExtensionContext {
+  return {
+    cwd,
+    ui: { setStatus: () => {}, notify: () => {} },
+    newSession: async () => {
+      onNewSession?.();
+    },
+    sessionManager: { getSessionFile: () => undefined },
+  } as unknown as ExtensionContext;
 }
 
 export default async function run(): Promise<void> {
@@ -283,6 +291,74 @@ export default async function run(): Promise<void> {
   messages.length = 0;
   await commands.get("next")?.("", makeCtx(ROOT));
   check("正文已生成时拒绝又推一份新大纲", messages.every((m) => m.customType !== "novelmaster-task"));
+
+  /* ---------------- /done、/brainstorm ---------------- */
+
+  section("/done 与 /brainstorm");
+
+  // 闸门：状态不对时拒绝，且**不**清上下文。
+  let cleared = 0;
+  setLayer("write");
+  messages.length = 0;
+  await commands.get("done")?.("", makeCtx(ROOT, () => { cleared += 1; }));
+  check("状态不满足时 /done 被拒绝", cleared === 0);
+
+  const stateFile2 = statePath(novelRoot);
+  const setState = (patch: Record<string, unknown>): void => {
+    writeDoc(stateFile2, NovelStateSchema, { ...readDoc(stateFile2, NovelStateSchema, "state.json"), ...patch } as never, "state.json");
+  };
+
+  setState({ chapterStatus: "reflowed", pendingReflow: true });
+  await commands.get("done")?.("", makeCtx(ROOT, () => { cleared += 1; }));
+  check("pendingReflow 为 true 时 /done 被拒绝", cleared === 0);
+
+  setState({ chapterStatus: "reflowed", pendingReflow: false });
+  await commands.get("done")?.("", makeCtx(ROOT, () => { cleared += 1; }));
+  check("缺章节摘要时 /done 被拒绝", cleared === 0);
+
+  // 补上摘要，闸门应当放行。
+  writeChapterSummary(novelRoot, 1, {
+    synopsis: "本章梗概。",
+    appearedCharacters: ["C-001"],
+    appearedLocations: [],
+    advancedEvents: [],
+    newSettings: [],
+    newForeshadows: [],
+    endState: "结尾。",
+  });
+  setState({ chapterStatus: "reflowed", pendingReflow: false });
+  await commands.get("done")?.("", makeCtx(ROOT, () => { cleared += 1; }));
+  check("闸门全部满足时结章", cleared === 1);
+  check("状态推进到 accepted", openNovelAt(novelRoot)?.state.chapterStatus === "accepted");
+  check("**结章时清空上下文**（newSession 被调用）", cleared === 1);
+
+  // /next 从 accepted 推进到下一章。
+  messages.length = 0;
+  await commands.get("next")?.("", makeCtx(ROOT));
+  check("**/next 从 accepted 推进章号**", openNovelAt(novelRoot)?.state.currentChapter === 2);
+  check("新章状态为 not_started", openNovelAt(novelRoot)?.state.chapterStatus === "not_started");
+  check("新章注入任务段", messages.some((m) => m.customType === "novelmaster-task"));
+  const advanced = openNovelAt(novelRoot);
+  check("推进到第二章后主事件被清空（不把上章的事件带过来）", advanced?.state.currentEventId === null);
+
+  // /brainstorm 的两道硬约束。
+  setLayer("menu");
+  messages.length = 0;
+  await commands.get("brainstorm")?.("随便一个方向", makeCtx(ROOT));
+  check("主菜单层不能用 /brainstorm", messages.every((m) => m.customType !== "novelmaster-task"));
+
+  setLayer("outline");
+  messages.length = 0;
+  await commands.get("brainstorm")?.("   ", makeCtx(ROOT));
+  check("**没给方向时不启动**（硬约束）", messages.every((m) => m.customType !== "novelmaster-task"));
+
+  messages.length = 0;
+  await commands.get("brainstorm")?.("如果主角是内鬼", makeCtx(ROOT));
+  const brainstormTask = messages.find((m) => m.customType === "novelmaster-task");
+  check("给了方向就发任务段", brainstormTask !== undefined);
+  check("任务段带上方向", (brainstormTask?.content ?? "").includes("如果主角是内鬼"));
+  check("任务段要求主会话设计视角", (brainstormTask?.content ?? "").includes("自行设计"));
+  check("任务段要求不要投票", (brainstormTask?.content ?? "").includes("不要投票"));
 
   /* ---------------- 未打开小说 ---------------- */
 

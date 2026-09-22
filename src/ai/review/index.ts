@@ -12,13 +12,10 @@
 import { defineTool } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { STRICT } from "../../data/schema.ts";
-import { NAMES, statePath } from "../../data/paths.ts";
 import { chapterNo } from "../../data/ids.ts";
-import { readDoc, writeDoc } from "../../data/doc.ts";
 import { DataError } from "../../data/errors.ts";
-import { NovelStateSchema } from "../../data/schema.ts";
-import { assertTransition } from "../../data/state.ts";
-import { syncChapterStatus, writeChapterReport } from "../../data/chapters.ts";
+import { advanceStatus } from "../../data/state.ts";
+import { writeChapterReport } from "../../data/chapters.ts";
 import { validateEvidence } from "../../data/validate.ts";
 import type { OpenNovel } from "../../data/novel.ts";
 import { readIndexTool } from "../../tools/read.ts";
@@ -60,20 +57,39 @@ export type ReviewerRunner = (
   context: { input: string; novel: OpenNovel; cwd: string },
 ) => Promise<TaskOutcome<Finding[]>>;
 
+/**
+ * 默认的三个审查员（完整审查）。
+ *
+ * 另一个集合是「改稿复查」：去 AI 味之后只重查 F / G —— 理由见
+ * docs/design/pipeline.md「去 AI 味之后必须重查」。
+ */
+export const POST_DEAI_REVIEWERS: readonly ReviewerSpec[] = [
+  { name: "改稿复查员", categories: ["F", "G"], focus: "去 AI 味之后，表达层有没有被改坏" },
+];
+
+export type ReviewMode = "full" | "post-deai";
+
+export function reviewersFor(mode: ReviewMode): readonly ReviewerSpec[] {
+  return mode === "full" ? REVIEWERS : POST_DEAI_REVIEWERS;
+}
+
 export interface ReviewOptions {
   novel: OpenNovel;
   chapter: number;
   /** 主会话 cwd（**不是小说根**：`novel_*` 工具靠它读 config.json 定位小说）。 */
   cwd: string;
+  /** 审查员集合，默认三个。 */
+  reviewers?: readonly ReviewerSpec[] | undefined;
   onProgress?: ((done: number, total: number, reviewer: ReviewerSpec) => void) | undefined;
 }
 
 export async function review(options: ReviewOptions, runner?: ReviewerRunner): Promise<ReviewResult> {
   const input = renderReviewInput(options.novel, options.chapter);
   const run = runner ?? defaultReviewerRunner();
+  const reviewers = options.reviewers ?? REVIEWERS;
 
   const results = await runParallel(
-    REVIEWERS,
+    reviewers,
     (reviewer) => run(reviewer, { input, novel: options.novel, cwd: options.cwd }),
     options.onProgress,
   );
@@ -124,13 +140,19 @@ export async function runReviewAndPersist(
     novel: OpenNovel;
     chapter: number;
     cwd: string;
+    /** `full` = 三个审查员；`post-deai` = 只跑 F/G 的改稿复查。 */
+    mode?: ReviewMode | undefined;
     onProgress?: ((done: number, total: number, reviewer: ReviewerSpec) => void) | undefined;
   },
   /** 注入假 runner 供测试；生产不传。 */
   runner?: ReviewerRunner,
 ): Promise<PersistedReview> {
   const { novel, chapter } = options;
-  const result = await review({ novel, chapter, cwd: options.cwd, onProgress: options.onProgress }, runner);
+  const mode: ReviewMode = options.mode ?? "full";
+  const result = await review(
+    { novel, chapter, cwd: options.cwd, reviewers: reviewersFor(mode), onProgress: options.onProgress },
+    runner,
+  );
 
   if (result.fatal) {
     const failed = result.outcomes.filter((outcome) => outcome.status === "fatal");
@@ -143,17 +165,19 @@ export async function runReviewAndPersist(
   const missing = result.outcomes.filter((outcome) => outcome.status !== "ok");
   const markdown = renderReviewReport({
     chapter,
+    mode,
     findings: result.findings,
     reviewers: result.outcomes.filter((outcome) => outcome.status === "ok").map((outcome) => outcome.reviewer.name),
     missing: missing.map((outcome) => ({ name: outcome.reviewer.name, detail: outcome.detail })),
   });
 
   writeChapterReport(novel.root, chapter, "review", markdown);
-  advanceToAutoReviewed(novel, chapter);
+  advanceToAutoReviewed(novel, chapter, mode);
 
   const stats = countFindings(result.findings);
   const lines = [
-    `已完成第 ${chapterNo(chapter)} 章的审查，报告已写入 chapters/${chapterNo(chapter)}.review.md。`,
+    `已完成第 ${chapterNo(chapter)} 章的${mode === "full" ? "审查" : "改稿复查（只覆盖 F / G）"}，` +
+      `报告已写入 chapters/${chapterNo(chapter)}.review.md。`,
     `统计：blocking ${stats.blocking} ｜ warning ${stats.warning} ｜ note ${stats.note} ｜ 依据无效 ${stats.invalidEvidence}`,
   ];
   if (missing.length > 0) {
@@ -170,16 +194,10 @@ export async function runReviewAndPersist(
   };
 }
 
-function advanceToAutoReviewed(novel: OpenNovel, chapter: number): void {
-  if (novel.state.chapterStatus !== "drafted") return;
-  assertTransition("drafted", "auto_reviewed");
-  writeDoc(
-    statePath(novel.root),
-    NovelStateSchema,
-    { ...novel.state, chapterStatus: "auto_reviewed" },
-    NAMES.state,
-  );
-  syncChapterStatus(novel.root, chapter, "auto_reviewed");
+function advanceToAutoReviewed(novel: OpenNovel, chapter: number, mode: ReviewMode): void {
+  // 改稿复查发生在去 AI 味**之后**（那时状态已过 auto_reviewed），所以不动状态。
+  if (mode !== "full") return;
+  advanceStatus(novel.root, chapter, "drafted", "auto_reviewed");
 }
 
 function defaultReviewerRunner(): ReviewerRunner {

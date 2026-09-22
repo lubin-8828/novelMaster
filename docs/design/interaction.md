@@ -30,7 +30,7 @@ pi 已有内建命令。**我们的命令名必须避开它们**，否则会出�
 | `/help` | 任意 | 显示**当前层面**可用命令 | ✅ 已实现 |
 | `/back` | ← 上一层 | 退回上一层；在主菜单时提示用 `/quit` 退出程序 | ✅ 已实现 |
 | `/context` | write | 打印本章上下文包（每部分的 token 估算 + 来源 + 截断内容）；`/context <段名或序号>` 看单段全文 | ✅ 已实现 |
-| `/next` | write | 推演下一章大纲，交用户确认 | 里程碑 7 |
+| `/next` | write | 推演下一章大纲，交用户确认；从 `accepted` 调用时先推进章号 | ✅ 已实现 |
 | `/review` | write | 审查（章末自动触发，也可手动补跑） | 里程碑 8 |
 | `/deai` | write | 去 AI 味（章末自动触发，也可手动补跑） | 里程碑 9 |
 | `/done` | write | 验收通过：落盘 + 回填校验 + 清空上下文 | 里程碑 10 |
@@ -229,8 +229,21 @@ ctx.ui.setStatus("novelmaster", renderStatus(layer, novel, chapter));
 | 推演本章大纲 | `/next` 命令：校验状态 → 装配上下文 → 注入任务段（要求输出结构化头块）→ AI 写草稿 |
 | 确认大纲 | 用户在对话里说通过 → AI 调 `novel_state_update` 置 `outlined`。**不设自动确认** |
 | 生成正文 | 用户说「写」→ AI 直接流式生成（上下文已在层装载里）→ 调 `novel_chapter_write` 落盘 → 置 `drafted` |
+| 审查 | 生成后立即调 `novel_review`（置 `auto_reviewed`） |
+| 去 AI 味 | 审查后调 `novel_deai`（置 `deai_done`，并自动跑改稿复查 → `awaiting_user_review`） |
+| 用户验收 | 自己改 txt，或让 AI 改（AI 改完要**重跑审查 + 去 AI 味**） |
+| 回填资料 | 用户说「就这样」→ AI 按固定顺序逐条调工具（见 `pipeline.md「回填：结章闸门」`）→ 置 `reflowed` |
+| 结章 | `/done`：闸门校验 → `accepted` → **清空上下文** → 提示敲 `/next` 开始下一章 |
 | 查看喂了什么 | `/context`（带总表与截断），`/context <段名>` 看单段全文 |
-| 后续（里程碑 8–10） | 自动审查 → 去 AI 味 → 用户验收 → 回填 → `/done` |
+
+**用户自己改稿的两种情形，落到两个状态上**：
+
+| 情形 | 状态 |
+|------|------|
+| 用户直接编辑 `NNN.txt` 后说一声 | AI 置 `{ user_edited, pendingReflow: true }` → 回填 → `{ reflowed, pendingReflow: false }` |
+| 用户让 AI 改 | AI 改完**重跑审查 + 去 AI 味**，回到 `awaiting_user_review` |
+
+**为什么 AI 改完必须重跑**：它改的是正文，而改过的正文还没被审查过。不重跑的话，用户验收的就不是「被审查过的那一版」—— 而「哪一版被审查过」必须确定（见 `pipeline.md「用户检查与修改」`）。
 
 **`/next` 只在两种状态下可用**：上一章已 `accepted`，或首次进入 `not_started`。其它状态下拒绝并说清当前状态 —— 用户不会想在「正文已生成」时又推一份新大纲。
 

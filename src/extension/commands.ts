@@ -1,9 +1,14 @@
 import type { ExtensionAPI, ExtensionContext, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { CMD, ENTRY_LAYERS, LAYERS, ALL_COMMANDS, COMMANDS, getLayer, setLayer, type CmdName, type Layer } from "./layers.ts";
-import { renderContext, renderHelp, renderNextTask, renderStatus, CHAPTER_STATUS_LABEL } from "./render.ts";
+import { renderContext, renderHelp, renderBrainstormTask, renderNextTask, renderStatus, CHAPTER_STATUS_LABEL } from "./render.ts";
 import { renderLayerData, safeLayerData } from "./layer-data.ts";
 import { assemble } from "../ai/context-assembler.ts";
 import { runReviewAndPersist } from "../ai/review/index.ts";
+import { runDeaiWithRecheck } from "../ai/deai/index.ts";
+import { advanceStatus, startNextChapter } from "../data/state.ts";
+import { chapterNo } from "../data/ids.ts";
+import { chapterSummaryPath } from "../data/paths.ts";
+import { exists } from "../data/io.ts";
 import { errorText } from "../data/errors.ts";
 import { openNovel } from "../data/novel.ts";
 import { defaultNovelRoot, writeConfig } from "../data/paths.ts";
@@ -102,6 +107,107 @@ export function registerCommands(pi: ExtensionAPI): void {
     },
   });
 
+  pi.registerCommand(CMD.deai, {
+    description: "去 AI 味（章末自动触发，也可手动补跑）",
+    handler: async (_args, ctx) => {
+      const novel = openNovel(ctx.cwd);
+      if (novel === null) {
+        ctx.ui.notify("还没有打开小说。先用 /init 新建一本。", "warning");
+        return;
+      }
+      try {
+        const result = await runDeaiWithRecheck({
+          novel,
+          chapter: novel.state.currentChapter,
+          cwd: ctx.cwd,
+          onProgress: (message) => ctx.ui.notify(message, "info"),
+        });
+        emit(
+          pi,
+          "novelmaster-deai",
+          [result.deai.text, result.recheck.text, "", "──────── 去 AI 味报告全文 ────────", "", result.deai.reportMarkdown].join("\n"),
+        );
+      } catch (err) {
+        ctx.ui.notify(errorText(err), "error");
+      }
+    },
+  });
+
+  pi.registerCommand(CMD.brainstorm, {
+    description: "按你给定的方向起多 agent 头脑风暴",
+    handler: async (args, ctx) => {
+      if (getLayer() === "menu") {
+        ctx.ui.notify("/brainstorm 要在具体层面里用（/outline、/event、/write）。", "warning");
+        return;
+      }
+      const angle = args.trim();
+      if (angle === "") {
+        // 硬约束：没有方向不启动（否则容易偏离用户思路）。
+        ctx.ui.notify(
+          "请给出讨论方向。例：/brainstorm 如果主角其实是内鬼，故事会怎么走？",
+          "warning",
+        );
+        return;
+      }
+      const novel = openNovel(ctx.cwd);
+      if (novel === null) {
+        ctx.ui.notify("还没有打开小说。先用 /init 新建一本。", "warning");
+        return;
+      }
+      emit(pi, "novelmaster-task", renderBrainstormTask(angle));
+    },
+  });
+
+  pi.registerCommand(CMD.done, {
+    description: "验收通过：结章 + 清空上下文",
+    handler: async (_args, ctx) => {
+      const novel = openNovel(ctx.cwd);
+      if (novel === null) {
+        ctx.ui.notify("还没有打开小说。先用 /init 新建一本。", "warning");
+        return;
+      }
+
+      const chapter = novel.state.currentChapter;
+      const state = novel.state;
+
+      // 闸门：**逐条列出缺什么**，而不是只说「不满足条件」——
+      // 用户需要知道的是「去做什么」。
+      const missing: string[] = [];
+      if (state.chapterStatus !== "reflowed") {
+        missing.push(`章状态是「${CHAPTER_STATUS_LABEL[state.chapterStatus]}」，需要是「资料已回填」`);
+      }
+      if (state.pendingReflow) {
+        missing.push("pendingReflow 仍为 true —— 你改过正文但资料还没回填");
+      }
+      if (!exists(chapterSummaryPath(novel.root, chapter))) {
+        missing.push(`缺 chapters/${chapterNo(chapter)}.summary.md —— 回填时要写章节摘要`);
+      }
+      if (missing.length > 0) {
+        ctx.ui.notify(
+          `还不能结章（闸门读的是 state.json，不是对话里的话）：\n- ${missing.join("\n- ")}\n\n` +
+            `在对话里说明现状，我会把该做的做完。`,
+          "warning",
+        );
+        return;
+      }
+
+      const advanced = advanceStatus(novel.root, chapter, "reflowed", "accepted");
+      if (!advanced) {
+        ctx.ui.notify("结章失败：状态在检查与推进之间变了，请重试。", "error");
+        return;
+      }
+
+      // 清空上下文。`newSession` **只在命令处理器里可用**（事件处理器里会死锁）。
+      await ctx.newSession({ parentSession: ctx.sessionManager.getSessionFile() });
+
+      refreshStatus(ctx);
+      ctx.ui.notify(
+        `第 ${chapterNo(chapter)} 章已结章，上下文已清空。敲 /next 开始第 ${chapterNo(chapter + 1)} 章。`,
+        "info",
+      );
+    },
+  });
+
   pi.registerCommand(CMD.next, {
     description: "推演本章大纲，交你确认",
     handler: async (_args, ctx) => {
@@ -117,7 +223,21 @@ export function registerCommands(pi: ExtensionAPI): void {
 
       // 只允许从「上一章已验收」或「首次进入」推演新大纲。
       // 在「正文已生成」时又推一份新大纲，会把已经写过的正文悬空。
-      const state = novel.state;
+      let state = novel.state;
+      if (state.chapterStatus === "accepted") {
+        // 上一章刚结章 —— 先推进章号（「下一章开始了吗」是另一个事实，见 pipeline.md）。
+        const next = startNextChapter(novel.root);
+        if (next === null) {
+          ctx.ui.notify("状态在检查与推进之间变了，请重试。", "error");
+          return;
+        }
+        refreshStatus(ctx);
+        ctx.ui.notify(`开始第 ${chapterNo(next)} 章。`, "info");
+        const reopened = openNovel(ctx.cwd);
+        if (reopened === null) return;
+        state = reopened.state;
+      }
+
       if (state.chapterStatus !== "not_started" && state.chapterStatus !== "accepted") {
         ctx.ui.notify(
           `第 ${state.currentChapter} 章的状态是「${CHAPTER_STATUS_LABEL[state.chapterStatus]}」，此时不推演新大纲。` +
@@ -128,7 +248,12 @@ export function registerCommands(pi: ExtensionAPI): void {
       }
 
       try {
-        emit(pi, "novelmaster-task", renderNextTask(assemble(novel, state.currentChapter)));
+        const current = openNovel(ctx.cwd);
+        if (current === null) {
+          ctx.ui.notify("小说打不开了 —— 文件可能被改坏了。", "error");
+          return;
+        }
+        emit(pi, "novelmaster-task", renderNextTask(assemble(current, state.currentChapter)));
       } catch (err) {
         ctx.ui.notify(`装配上下文失败：${errorText(err)}`, "error");
       }

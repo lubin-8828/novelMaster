@@ -143,6 +143,30 @@ export function renderNextTask(bundle: ContextBundle): string {
   return lines.join("\n");
 }
 
+/**
+ * `/brainstorm <方向>` 的任务段。
+ *
+ * 命令只做两件事：校验用户**给了方向**（硬约束：没有方向不启动），
+ * 以及把「设计视角」交给主会话 —— 它刚跟用户聊过，比我更知道「这几条线」指什么。
+ */
+export function renderBrainstormTask(angle: string): string {
+  return [
+    "【任务】多 agent 讨论（脑暴）",
+    "",
+    `用户给的方向：${angle}`,
+    "",
+    "请你：",
+    "1. **自行设计 2–6 个视角**（每个含 `name` 与 `focus`）。角度要切得开 ——",
+    "   不要给两个同义的视角，那等于只有一个。",
+    "2. 调 `novel_brainstorm` 起讨论（参数 `angle` + `perspectives`）。",
+    "3. 拿到各角色的产出后，**你来综合**：共识 / 真实分歧 / 被忽略的选项 / 新暴露的假设。",
+    "   **不要投票决定取舍** —— 分歧本身就是要给用户看的东西。",
+    "",
+    "注意：讨论角色是只读的，它们不会改任何文件（讨论是材料，不是数据）。",
+    "如果你认为这个方向需要先补充资料（人物 / 设定）才能真正讨论，先说清这一点，而不是编。",
+  ].join("\n");
+}
+
 /** 注入系统提示词的项目段。描述小说数据布局与硬规则。 */
 export function renderProjectSection(novelRoot: string, title: string): string {
   return [

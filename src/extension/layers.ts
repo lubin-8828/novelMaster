@@ -109,9 +109,12 @@ export const LAYERS: Record<Layer, LayerSpec> = {
       "每一章必须走完这条流水线，不得跳步：推演本章大纲 → 用户确认 → 生成正文 → 审查 → 去 AI 味 → 用户验收 → 回填资料 → 清空上下文。",
       "用户确认之前的任何一步都不算数。用户没有明确说通过，就不要推进到下一步。",
       "推演大纲用 novel_chapter_outline_write（草稿态，不传 confirmNote）；用户确认后才调 novel_state_update 置 outlined。",
-      "生成正文后调 novel_chapter_write 落盘，再调 novel_state_update 置 drafted，**然后立即调 novel_review 跑审查**（它会置 auto_reviewed）。状态只能靠工具改，不要在对话里口头宣告「已进入下一步」—— 状态栏与后续闸门读的是 state.json。",
+      "**然后立即调 novel_review 跑审查**（它会置 auto_reviewed），**审查完成再调 novel_deai**（它会置 deai_done 并自动跑改稿复查）。状态只能靠工具改，不要在对话里口头宣告「已进入下一步」—— 状态栏与后续闸门读的是 state.json。",
       "审查报告出来后**逐条呈现给用户**（blocking 先、warning 后、note 最后），等他拍板。不要自己判断「这条不重要」。",
       "审查员只读、不改稿 —— 若用户要根据报告改稿，改完必须**重跑审查**（改过的正文还没被审过，直接验收等于验收了一版没审的稿）。",
+      "去 AI 味只动表达层，不改事实 —— 它的报告里有一节机械校验（人名 / 设定术语 / 数字有没有被增删），结果要如实告知用户。",
+      "用户验收后按固定顺序**逐条**回填（见 pipeline.md「回填：结章闸门」）：人物时间轴 → 人物状态 → 关系变更 → 事件细化 → 事件状态 → 伏笔 → 新设定 → 章节摘要 → 回填报告。顺序不能变 —— 事件细化要知道「谁做了什么」，而人物时间轴是那个信息最原始的落点。",
+      "用户说「我改好了」时，先置 `{ chapterStatus: \"user_edited\", pendingReflow: true }`；回填完成后置 `{ chapterStatus: \"reflowed\", pendingReflow: false }`。**`/done` 的闸门读的是 state.json**，不是对话里的话。",
       "本层每说一句话都会带上那份上下文包（几万 token）。写完一章验收后就 /done 清空上下文，不要留在这一层闲聊。",
     ].join("\n"),
   },
@@ -136,9 +139,9 @@ export const COMMANDS: Record<CmdName, CommandMeta> = {
   [CMD.context]: { desc: "打印本章上下文包（喂给 AI 了什么）" },
   [CMD.next]: { desc: "推演本章大纲，交你确认" },
   [CMD.review]: { desc: "审查（章末自动触发，也可手动补跑）" },
-  [CMD.deai]: { desc: "去 AI 味（章末自动触发，也可手动补跑）", milestone: 9 },
-  [CMD.done]: { desc: "验收通过：落盘 + 回填资料 + 清空上下文", milestone: 10 },
-  [CMD.brainstorm]: { desc: "按你给定的方向起多 agent 头脑风暴", milestone: 11 },
+  [CMD.deai]: { desc: "去 AI 味（章末自动触发，也可手动补跑）" },
+  [CMD.done]: { desc: "验收通过：结章 + 清空上下文" },
+  [CMD.brainstorm]: { desc: "按你给定的方向起多 agent 头脑风暴" },
 };
 
 /** 每个层面的命令清单与显示顺序。这是"命令出现在哪里"的唯一来源。 */

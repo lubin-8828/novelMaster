@@ -13,6 +13,7 @@ import runTools from "./tools.ts";
 import runBrainstorm from "./brainstorm.ts";
 import runContext from "./context.ts";
 import runReport from "./report.ts";
+import runDeai from "./deai.ts";
 
 await runSmoke();
 await runLayers();
@@ -21,5 +22,6 @@ await runTools();
 await runBrainstorm();
 runContext();
 await runReport();
+await runDeai();
 
 finish();

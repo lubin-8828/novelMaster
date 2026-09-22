@@ -109,7 +109,7 @@ novelMaster/
 │   │   ├── index.ts              # 注册全部 novel_* 工具
 │   │   ├── guard.ts              # 护栏：拦 write/edit 写小说根（不动 shell）
 │   │   ├── helper.ts             # withNovel / 错误文本 / 留痕封装 / 失败计数
-│   │   └── read.ts  setting.ts  character.ts  relation.ts  outline.ts  meta.ts  event.ts  chapter.ts  state.ts  inbox.ts  brainstorm.ts  review.ts
+│   │   └── read.ts  setting.ts  character.ts  relation.ts  outline.ts  meta.ts  event.ts  chapter.ts  state.ts  inbox.ts  brainstorm.ts  review.ts  deai.ts
 │   ├── ai/                       # AI 层：会话、模型、编排。不做文件 I/O 决策
 │   │   ├── models.ts             # 按用途取模型（draft / review / brainstorm）
 │   │   ├── session.ts            # 只读子会话工厂
@@ -125,7 +125,11 @@ novelMaster/
 │   │   │   ├── input.ts          # 审查输入（九段 + 本章正文 + 预筛事实）
 │   │   │   ├── merge.ts          # 机械合并 + 标记依据无效
 │   │   │   └── report.ts         # NNN.review.md 渲染
-│   │   └── deai/                 # 去 AI 味引擎                  ← 里程碑 9
+│   │   └── deai/                 # 去 AI 味引擎
+│   │       ├── index.ts          # 编排：一个改写子会话 + 落盘 + 触发复查
+│   │       ├── skill.ts          # humanizer skill 的显式注入
+│   │       ├── scope.ts          # 机械范围检查（专有名词 / 数字）
+│   │       └── report.ts         # NNN.deai.md 渲染
 │   └── prompts/                  # 各角色 system prompt 模板      ← 里程碑 4
 ├── tests/
 │   ├── harness.ts                # check / section / 失败计数
@@ -136,7 +140,8 @@ novelMaster/
 │   ├── data.ts                   # 数据层（schema / ID / 追加式 / 状态机）
 │   ├── tools.ts                  # 工具层与写入护栏
 │   ├── brainstorm.ts             # 多 agent 讨论
-│   └── report.ts                 # 审查引擎（清单 / 合并 / 依据校验 / 渲染）
+│   ├── report.ts                 # 审查引擎（清单 / 合并 / 依据校验 / 渲染）
+│   └── deai.ts                   # 去 AI 味引擎（skill 注入 / 范围检查 / 报告）
 ├── docs/design/                  # 设计子文档
 └── novels/                       # 默认小说根目录（git 忽略）
 ```
