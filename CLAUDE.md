@@ -63,10 +63,14 @@ novelMaster 是一个跑在终端里的 AI 辅助小说写作工具，单人单�
 
 ```bash
 npm install          # 装依赖（无原生构建步骤）
-npm start            # 启动 TUI
+./start.sh           # 启动 TUI（带前置检查：Node 版本 / 依赖 / 交互终端）
+./stop.sh            # 从另一个终端停止（正常在 TUI 里 Ctrl+C 或 /quit）
+npm start            # 同上，不带前置检查
 npm test             # 全部测试（771 项断言），不启动 TUI
 npm run typecheck    # tsc --noEmit，含 src/ 与 tests/，纯类型检查
 ```
+
+**novelMaster 是 TUI，不是后台服务** —— 它要交互终端。想常驻用 tmux（`start.sh` 在非 TTY 下会打印具体命令）。
 
 ### 必须知道的五条
 

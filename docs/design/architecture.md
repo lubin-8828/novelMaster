@@ -197,8 +197,20 @@ npm install          # 148 个包，无原生模块构建步骤
 | 命令 | 作用 |
 |------|------|
 | `npm start` | 启动 TUI（等价 `node src/cli.ts`） |
+| `./start.sh` | 同上，但带前置检查（Node 版本 / 依赖 / **是否在交互终端里**） |
+| `./stop.sh` | 从**另一个终端**停止。正常退出在 TUI 里 Ctrl+C 或 `/quit` 就行 |
 | `npm test` | 全部测试（等价 `node tests/all.ts`），不启动 TUI |
 | `npm run typecheck` | `tsc --noEmit`，纯类型检查 |
+
+**为什么 `start.sh` 不做成后台 daemon。** novelMaster 是 **TUI，不是服务** —— 它要一个交互终端（用户得看着界面输入）。后台启动的结果是「进程活着，但你既看不到界面也没法输入」，所以脚本遇到非 TTY 会**直接拒绝并给出 tmux 方案**，而不是起一个不响应的进程让人发呆。想常驻（手机息屏后还在）就用 tmux：
+
+```bash
+pkg install tmux
+tmux new -s novelmaster './start.sh'   # 起来后 Ctrl+B 然后 D 脱离
+tmux attach -t novelmaster             # 下次接回去
+```
+
+**`start.sh` 里的 `exec` 不是风格问题。** 它让 node 顶替 shell 而 **exec 保留 pid** —— pidfile 里存的才是 node 的 pid，`stop.sh` kill 它才真的杀到进程。第一版没写 `exec`，结果 `stop.sh` 只杀掉了外壳、node 变成孤儿继续跑（这个缺陷是实测出来的，不是推的）。也不用 `node ... &` + `wait`：后台进程不在前台进程组里，读终端会被 SIGTTIN 停掉，TUI 直接卡死。
 
 ### 7.3 调试方法
 
