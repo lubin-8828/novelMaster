@@ -55,11 +55,8 @@ UI 形态受 pi 约束：输入框是 pi 的编辑器，命令必须以 `/` 开�
 
 **`cwd` 现在影响两件事**：数据位置（`<启动目录>/.novelmaster/`）与子会话里 `read` 工具的相对路径基准（pi 的资源发现用 `systemPromptOverride` + `appendSystemPromptOverride: () => []` 关掉了）。小说根的绝对路径会写进子会话的基线文本（`ai.md「多 agent 讨论」`），所以子会话不需要靠 `cwd` 找书。
 
-## 2. 与 pi 的集成点（已核对 API，v0.86.1）
+## 2. 与 pi 的集成点（已核对 API，v0.87.0）
 
----
-
-## 2. 与 pi 的集成点（已核对 API，v0.86.1）
 | 需求 | 用什么 | 关键约束 |
 |------|--------|----------|
 | 分层命令 | `pi.registerCommand(name, { description, handler })` | handler 拿到 `ExtensionCommandContext` |
@@ -198,7 +195,7 @@ novelMaster/
 
 | 依赖/API | 用途 | 文档地址 |
 |----------|------|----------|
-| `@earendil-works/pi-coding-agent` (v0.86.1) | Agent 运行时、会话管理、TUI 宿主、扩展 API | pi 安装目录下 `docs/sdk.md`、`docs/extensions.md`、`docs/tui.md` |
+| `@earendil-works/pi-coding-agent` (v0.87.0) | Agent 运行时、会话管理、TUI 宿主、扩展 API | pi 安装目录下 `docs/sdk.md`、`docs/extensions.md`、`docs/tui.md` |
 | `typebox` (1.3.27) | **数据结构的唯一定义源**：`Type.Object` 定义 → `Static<>` 推导 TS 类型 → `Value.Check` 运行时校验；自定义工具的参数字典也用它 | 与 pi 的 `registerTool` 配套；pi 自身也用同一版本。**每个对象必须显式写 `additionalProperties: false`** —— 默认是允许额外属性的 |
 | Node.js >= 22.19 | 运行时 + 原生 TS 类型剥离 | https://nodejs.org/api/typescript.html |
 | TypeScript ^5.9 | 仅类型检查 | https://www.typescriptlang.org/docs/ |
