@@ -8,7 +8,8 @@
 
 import { readText, writeTextAtomic } from "./io.ts";
 import { NAMES, settingDocPath, settingIndexPath } from "./paths.ts";
-import { applySectionOps, chapterLine, composeDoc, readSectionLines } from "./md.ts";
+import { applySectionOps, chapterLine, composeDoc, readSectionLines, stripSection } from "./md.ts";
+import { diffFields, type FieldChange } from "./diff.ts";
 import { readDocOrNull, writeDoc } from "./doc.ts";
 import { nextId, requireId } from "./ids.ts";
 import { DataError } from "./errors.ts";
@@ -24,11 +25,16 @@ export interface UpsertSettingInput {
   body: string;
   /** 首次确立于第几章；0 表示在设定期建立。省略则沿用原值，新建时默认 0。 */
   establishedIn?: number | undefined;
+  tags?: string[] | undefined;
+  /** 废止而不是删除（见 docs/design/data.md「ID 分配」）。 */
+  deprecated?: boolean | undefined;
 }
 
 export interface UpsertSettingResult {
   id: string;
   created: boolean;
+  /** 更新时的字段变化；新建时为空数组。工具层据它渲染 diff 摘要。 */
+  changes: FieldChange[];
 }
 
 export function listSettings(root: string): SettingItem[] {
@@ -48,6 +54,11 @@ export function upsertSetting(root: string, input: UpsertSettingInput): UpsertSe
   const previous = index.items.find((item) => item.id === id);
   const establishedIn = input.establishedIn ?? previous?.establishedIn ?? 0;
 
+  // 先读旧详述再写：body 不在索引里，diff 要拿它比较，只能在覆盖前取。
+  const docPath = settingDocPath(root, id);
+  const existingDoc = readText(docPath);
+  const previousBody = existingDoc === null ? "" : bodyOf(existingDoc);
+
   // 先详述 md，再索引 json。
   writeSettingDoc(root, id, input, establishedIn, previous === undefined);
 
@@ -57,14 +68,45 @@ export function upsertSetting(root: string, input: UpsertSettingInput): UpsertSe
     category: input.category,
     summary: input.summary,
     establishedIn,
-    tags: previous?.tags ?? [],
-    deprecated: previous?.deprecated ?? false,
+    tags: input.tags ?? previous?.tags ?? [],
+    deprecated: input.deprecated ?? previous?.deprecated ?? false,
     updatedAt: new Date().toISOString(),
   };
   const items = previous === undefined ? [...index.items, item] : index.items.map((x) => (x.id === id ? item : x));
   writeDoc(indexPath, SettingIndexSchema, { ...index, items }, NAMES.settingIndex);
 
-  return { id, created };
+  // diff 只列「这次真正动了的字段」。字段清单是显式的 —— 加了新字段就该出现在这里，
+  // 漏了会让「改了却没报」变成静默行为。
+  const changes = diffFields(
+    previous === undefined
+      ? undefined
+      : {
+          name: previous.name,
+          category: previous.category,
+          summary: previous.summary,
+          body: previousBody,
+          establishedIn: previous.establishedIn,
+          tags: previous.tags,
+          deprecated: previous.deprecated,
+        },
+    {
+      name: item.name,
+      category: item.category,
+      summary: item.summary,
+      body: input.body.trim(),
+      establishedIn: item.establishedIn,
+      tags: item.tags,
+      deprecated: item.deprecated,
+    },
+    ["name", "category", "summary", "body", "establishedIn", "tags", "deprecated"],
+  );
+
+  return { id, created, changes };
+}
+
+/** 从条目 md 里取出详述正文（标题与「修订记录」区段之外的部分）。 */
+function bodyOf(doc: string): string {
+  return stripSection(doc, "修订记录").split("\n").slice(1).join("\n").trim();
 }
 
 /** 往设定条目的「修订记录」追加一行。历史只增不改。 */

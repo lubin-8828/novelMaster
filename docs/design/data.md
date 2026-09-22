@@ -410,7 +410,7 @@ primaryEvent: E-003
 | 工具 | 用途 | 关键参数 |
 |------|------|----------|
 | `novel_read_index` | 读某一类资料的索引（设定/人物/关系/事件/章节） | `kind` |
-| `novel_setting_upsert` | 新增或更新设定条目 | `id?`, `name`, `category`, `summary`, `body`, `establishedIn?` |
+| `novel_setting_upsert` | 新增或更新设定条目 | `id?`, `name`, `category`, `summary`, `body`, `establishedIn?`, `tags?`, `deprecated?` |
 | `novel_setting_append_revision` | 往设定条目追加修订记录 | `id`, `chapter`, `text` |
 | `novel_character_upsert` | 新增或更新人物（静态档案 + 状态） | `id?`, `name`, `aliases?`, `role`, `status?`, `firstAppeared?`, `static?`, `body?` |
 | `novel_character_append_timeline` | 给人物追加一条关键事件 | `id`, `chapter`, `text` |
@@ -516,3 +516,24 @@ primaryEvent: E-003
 每次成功的写操作追加一行到 `logs/operations.jsonl`，格式见 `data.md「写入约定」`。
 
 **实现落点是工具层而不是数据层**：数据层的写函数不知道自己是被 LLM 还是被别的东西调用的，而留痕的语义是「LLM 对资料做了什么」。在工具层统一包一层，日志内容与工具调用一一对应，不会漏也不会重复。
+
+### 7.7 写入结果的 diff 摘要
+
+工具返回的文本必须让用户能看出**改了什么**，而不只是「改成功了」。
+
+| 情形 | 返回文本 |
+|------|----------|
+| 新建 | `已新建设定条目 S-001（异能等级体系）。` —— 新建没有 diff，说清建了什么即可 |
+| 更新 | `已更新设定条目 S-001：` + 逐条 `- summary：一到九级 → 一到十二级` |
+| 更新但无实际变化 | `S-001 没有实际变化（传入的值与现有值相同）。` |
+| 追加（时间轴 / 修订记录） | `已给 C-001 追加时间轴条目，lastUpdatedChapter 推进到 7。` —— 追加本身就是「发生了什么事」 |
+
+长文本字段（`body`、档案详述）只报长度变化（`800 字 → 950 字`），不贴全文：diff 的用途是让人一眼看出「这次动了什么」，把 800 字正文贴进返回值只会把其他变化挤掉。
+
+实现：`src/data/diff.ts` 的 `diffFields(before, after, fields, longTextFields)` 算差异；各写函数把变更集放进自己的返回值；工具层只负责排版。
+
+**为什么这算规格而不是文案问题**：`interaction.md「各资料层行为规格」`要求「回显 diff 摘要让用户确认」。确认的前提是看得到变化 —— 只有「改好了」三个字时，用户唯一的回应就是「好」；有 diff，他才能说「等等，第 3 条别改」。
+
+**为什么用转述而不是阻断式闸门**（像正文校验那样）：资料层的改动是**用户自己要求的**，不是 AI 自主决定的，所以不需要额外的拍板环节；而阻断会强制 LLM 再调一次工具，对「改个摘要」这种操作太重。两种场合的区别在于「谁发起的改动」，不在于「改动大不大」。
+
+**已实现的工具**：`novel_setting_upsert`、`novel_character_upsert`、`novel_relation_upsert`（里程碑 3）。事件、章节类的写工具在各自的里程碑补 —— 但规格是全局的：**新增任何 upsert 类工具都要走 `diffFields` + `upsertText`**，否则「改了却没报」就成了一种静默行为。

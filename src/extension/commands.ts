@@ -1,6 +1,7 @@
 import type { ExtensionAPI, ExtensionContext, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { CMD, ENTRY_LAYERS, LAYERS, ALL_COMMANDS, COMMANDS, getLayer, setLayer, type CmdName, type Layer } from "./layers.ts";
 import { renderHelp, renderStatus } from "./render.ts";
+import { renderLayerData, safeLayerData } from "./layer-data.ts";
 import { openNovel } from "../data/novel.ts";
 import { defaultNovelRoot, writeConfig } from "../data/paths.ts";
 import { initNovel, slugify } from "../data/init.ts";
@@ -71,7 +72,16 @@ export function registerCommands(pi: ExtensionAPI): void {
       handler: async (_args, ctx) => {
         setLayer(layer);
         refreshStatus(ctx);
-        ctx.ui.notify(`进入${LAYERS[layer].label}层。用 /help 看本层命令。`, "info");
+
+        // 给用户的清单与注入给 AI 的是同一份（见 docs/design/ai.md「层面数据的装载」）。
+        // 进层后对着空屏幕不知道该说什么，是「有哪些条目」这一句能解决的问题。
+        const novel = openNovel(ctx.cwd);
+        const data = novel === null ? null : safeLayerData(layer, novel);
+        if (data === null) {
+          ctx.ui.notify(`进入${LAYERS[layer].label}层。用 /help 看本层命令。`, "info");
+          return;
+        }
+        emit(pi, "novelmaster-layer-data", renderLayerData(data));
       },
     });
   }

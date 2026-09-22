@@ -64,7 +64,7 @@ novelMaster 是一个跑在终端里的 AI 辅助小说写作工具，单人单�
 ```bash
 npm install          # 装依赖（无原生构建步骤）
 npm start            # 启动 TUI
-npm test             # 全部测试（354 项断言），不启动 TUI
+npm test             # 全部测试（426 项断言），不启动 TUI
 npm run typecheck    # tsc --noEmit，含 src/ 与 tests/，纯类型检查
 ```
 
@@ -84,6 +84,6 @@ npm run typecheck    # tsc --noEmit，含 src/ 与 tests/，纯类型检查
 
 ### 当前进度
 
-里程碑 1（骨架）与里程碑 2（数据层 + 工具层）已交付：19 个 `novel_*` 工具可用、写入护栏生效（拦 `write`/`edit` 写小说根，shell 保留）、354 项断言全过。
-里程碑 3（`/setting` `/person` 两层跑通）待开始。
+里程碑 1（骨架）、2（数据层 + 工具层）、3（`/setting` `/person` 两层）已交付：19 个 `novel_*` 工具可用、写入护栏生效、层面数据装载跑通、426 项断言全过。
+里程碑 4（`/outline`）待开始。
 详见 `docs/design/ops.md「里程碑与实施进度」`。

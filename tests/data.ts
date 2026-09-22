@@ -33,6 +33,7 @@ import {
   type ChapterStatus,
 } from "../src/data/schema.ts";
 import { chapterNo, nextId } from "../src/data/ids.ts";
+import { diffFields } from "../src/data/diff.ts";
 import { applySectionOps, assertPreserved, chapterLine, composeDoc, readSectionLines, stripSection } from "../src/data/md.ts";
 import { readDoc, writeDoc } from "../src/data/doc.ts";
 import { readJsonFile, readText, writeTextAtomic } from "../src/data/io.ts";
@@ -350,6 +351,67 @@ export default function run(): void {
   check("主线大纲的修订记录区段存在", text(outlinePath(root)).includes("## 修订记录"));
   check("追加大纲修订记录", !throws(() => appendUnderSection(outlinePath(root), "修订记录", ["- [CH-001] 测试"])) && text(outlinePath(root)).includes("测试"));
 
+  /* ---------------- 写入差异 ---------------- */
+
+  section("写入差异");
+
+  check("diffFields：新建（before 为 undefined）不产生 diff", diffFields(undefined, { a: 1 }, ["a"]).length === 0);
+  check("diffFields：未变字段不入列", diffFields({ a: 1, b: 2 }, { a: 1, b: 3 }, ["a", "b"]).length === 1);
+  check("diffFields：boolean 渲染为 是/否", diffFields({ d: false }, { d: true }, ["d"])[0]?.to === "是");
+  check("diffFields：数组用顿号连接", diffFields({ t: [] }, { t: ["甲", "乙"] }, ["t"])[0]?.to === "甲、乙");
+  check("diffFields：空数组显式为（空）", diffFields({ t: ["甲"] }, { t: [] }, ["t"])[0]?.to === "（空）");
+  check("diffFields：长字符串只报长度", diffFields({ b: "短" }, { b: "字".repeat(200) }, ["b"])[0]?.to === "200 字");
+  check("diffFields：null 渲染为（无）", diffFields({ a: 1 }, { a: null }, ["a"])[0]?.to === "（无）");
+
+  const created2 = upsertSetting(root, { name: "新条目", category: "item", summary: "新建摘要", body: "新建详述。" });
+  check("新建时 changes 为空（没有 diff 可报）", created2.changes.length === 0);
+
+  const updated2 = upsertSetting(root, {
+    id: created2.id,
+    name: "新条目",
+    category: "item",
+    summary: "改过的摘要",
+    body: "新建详述。",
+  });
+  check("更新时列出变化的字段", updated2.changes.some((c) => c.field === "summary"));
+  check("diff 带 before 与 after", updated2.changes.find((c) => c.field === "summary")?.from === "新建摘要" && updated2.changes.find((c) => c.field === "summary")?.to === "改过的摘要");
+  check("未变字段不出现在 diff 里", !updated2.changes.some((c) => c.field === "name"));
+
+  const noop = upsertSetting(root, { id: created2.id, name: "新条目", category: "item", summary: "改过的摘要", body: "新建详述。" });
+  check("传入相同值时 changes 为空（「没有实际变化」可被机器判定）", noop.changes.length === 0);
+
+  const bodyChanged = upsertSetting(root, { id: created2.id, name: "新条目", category: "item", summary: "改过的摘要", body: "字".repeat(200) });
+  check("详述变化被 diff 捕获", bodyChanged.changes.some((c) => c.field === "body"));
+  check("详述只报长度不贴全文", bodyChanged.changes.find((c) => c.field === "body")?.to === "200 字");
+
+  upsertSetting(root, { id: created2.id, name: "新条目", category: "item", summary: "改过的摘要", body: "新建详述。", tags: ["甲", "乙"], deprecated: true });
+  const tagged = listSettings(root).find((item) => item.id === created2.id);
+  check("tags 可写入", tagged?.tags.join("/") === "甲/乙");
+  check("deprecated 可写入（废止而不是删除）", tagged?.deprecated === true);
+  check("废止的条目仍在索引里", listSettings(root).some((item) => item.id === created2.id));
+
+  const resurrected = upsertSetting(root, {
+    id: created2.id,
+    name: "新条目",
+    category: "item",
+    summary: "改过的摘要",
+    body: "新建详述。",
+    tags: ["甲", "乙"],
+    deprecated: false,
+  });
+  check("deprecated 可改回 false", listSettings(root).find((item) => item.id === created2.id)?.deprecated === false);
+  check("取消废止也是一次可报告的 diff", resurrected.changes.some((c) => c.field === "deprecated" && c.from === "是" && c.to === "否"));
+
+  // 注意：C-001 在前面的测试里已经被改成 dead 了，所以这里测的是 dead → alive。
+  const c1Changed = upsertCharacter(root, { id: "C-001", name: "李明", role: "protagonist", status: "alive", static: { goal: "新目标" } }, 3);
+  check("人物更新产生 diff", c1Changed.changes.length > 0);
+  check("人物 diff 能看到状态变化", c1Changed.changes.some((c) => c.field === "status" && c.from === "dead" && c.to === "alive"));
+  check("人物 diff 能看到静态档案变化", c1Changed.changes.some((c) => c.field === "goal"));
+
+  // R-001 的 status 在前面的测试里已经是 broken，所以这里测 broken → ended。
+  const r1Changed = upsertRelation(root, { id: "R-001", from: "C-001", to: "C-002", type: "subordinate", status: "ended" }, ["C-001", "C-002"], 1);
+  check("关系更新产生 diff", r1Changed.changes.some((c) => c.field === "status" && c.from === "broken" && c.to === "ended"));
+
   /* ---------------- 章状态机 ---------------- */
 
   section("章状态机");
@@ -377,7 +439,7 @@ export default function run(): void {
   section("读盘校验");
 
   const readBack = readDoc(settingIndexPath(root), SettingIndexSchema, "setting/index.json");
-  check("readDoc 返回校验通过的数据", readBack.items.length === 2);
+  check("readDoc 返回校验通过的数据", readBack.items.some((item) => item.id === "S-001"));
   writeTextAtomic(settingIndexPath(root), JSON.stringify({ schemaVersion: 1, items: [{ id: "S-001" }] }));
   check("readDoc 对结构非法的文件抛错", throws(() => readDoc(settingIndexPath(root), SettingIndexSchema, "setting/index.json")));
   check("readDocOrNull 对非法文件同样抛错（不静默返回 null）", throws(() => listSettings(root)));

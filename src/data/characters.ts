@@ -9,6 +9,7 @@
 import { readText, writeTextAtomic } from "./io.ts";
 import { NAMES, characterDocPath, characterIndexPath } from "./paths.ts";
 import { applySectionOps, chapterLine, composeDoc, readSectionLines } from "./md.ts";
+import { diffFields, type FieldChange } from "./diff.ts";
 import { readDocOrNull, writeDoc } from "./doc.ts";
 import { nextId, requireId } from "./ids.ts";
 import { DataError } from "./errors.ts";
@@ -38,7 +39,21 @@ export interface UpsertCharacterInput {
 export interface UpsertCharacterResult {
   id: string;
   created: boolean;
+  /** 更新时的字段变化；新建时为空数组。 */
+  changes: FieldChange[];
 }
+
+/** 静态档案字段名。diff 里与顶层字段排在一起（两组不重名）。 */
+const STATIC_FIELD_NAMES = [
+  "age",
+  "gender",
+  "appearance",
+  "background",
+  "personality",
+  "speechHabits",
+  "goal",
+  "fear",
+] as const;
 
 export const EMPTY_CHARACTER_STATIC: CharacterStatic = {
   age: null,
@@ -91,7 +106,30 @@ export function upsertCharacter(
   const characters = previous === undefined ? [...index.characters, character] : index.characters.map((x) => (x.id === id ? character : x));
   writeDoc(indexPath, CharacterIndexSchema, { ...index, characters }, NAMES.charactersIndex);
 
-  return { id, created };
+  const changes = [
+    ...diffFields(
+      previous === undefined
+        ? undefined
+        : {
+            name: previous.name,
+            aliases: previous.aliases,
+            role: previous.role,
+            status: previous.status,
+            firstAppeared: previous.firstAppeared,
+          },
+      {
+        name: character.name,
+        aliases: character.aliases,
+        role: character.role,
+        status: character.status,
+        firstAppeared: character.firstAppeared,
+      },
+      ["name", "aliases", "role", "status", "firstAppeared"],
+    ),
+    ...diffFields(previous?.static, staticFields, STATIC_FIELD_NAMES),
+  ];
+
+  return { id, created, changes };
 }
 
 /** 往人物时间轴追加一条关键事件，并推进 `lastUpdatedChapter`。 */

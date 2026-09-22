@@ -6,7 +6,7 @@ import { defineTool } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { STRICT } from "../data/schema.ts";
 import { upsertSetting, appendSettingRevision } from "../data/settings.ts";
-import { withNovel } from "./helper.ts";
+import { upsertText, withNovel } from "./helper.ts";
 
 export const settingTools = [
   defineTool({
@@ -14,7 +14,8 @@ export const settingTools = [
     label: "新增或更新设定条目",
     description:
       "新增或更新一条世界观设定（规则、地点、势力、物品、禁忌）。省略 id 表示新建，工具会自动分配 S-NNN；" +
-      "带 id 表示更新已有条目。更新是覆盖式的：body 会替换旧详述，但「修订记录」原样保留（要留痕请另调 novel_setting_append_revision）。",
+      "带 id 表示更新已有条目。更新是覆盖式的：body 会替换旧详述，但「修订记录」原样保留（要留痕请另调 novel_setting_append_revision）。" +
+      "条目不想要了就置 deprecated: true，**不要重建一条来替代它** —— 历史审查报告可能引用旧 ID。",
     parameters: Type.Object(
       {
         id: Type.Optional(Type.String({ description: "已有条目的 ID，如 S-001；新建时省略" })),
@@ -32,6 +33,10 @@ export const settingTools = [
         establishedIn: Type.Optional(
           Type.Integer({ minimum: 0, description: "首次确立于第几章；0 表示在设定期建立" }),
         ),
+        tags: Type.Optional(Type.Array(Type.String(), { description: "分类标签" })),
+        deprecated: Type.Optional(
+          Type.Boolean({ description: "废弃标记。废止不等于删除（历史报告可能引用旧 ID）" }),
+        ),
       },
       STRICT,
     ),
@@ -44,12 +49,19 @@ export const settingTools = [
           summary: params.summary,
           body: params.body,
           establishedIn: params.establishedIn,
+          tags: params.tags,
+          deprecated: params.deprecated,
         });
-        const verb = result.created ? "已新建设定条目" : "已更新设定条目";
         return {
-          text: `${verb} ${result.id}（${params.name}）。`,
+          text: upsertText({
+            label: "设定条目",
+            id: result.id,
+            name: params.name,
+            created: result.created,
+            changes: result.changes,
+          }),
           target: `setting/${result.id}.md`,
-          details: { id: result.id, created: result.created },
+          details: { id: result.id, created: result.created, changes: result.changes },
         };
       });
     },

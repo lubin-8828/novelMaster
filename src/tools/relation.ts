@@ -7,7 +7,7 @@ import { Type } from "typebox";
 import { STRICT } from "../data/schema.ts";
 import { appendRelationHistory, upsertRelation } from "../data/relations.ts";
 import { listCharacters } from "../data/characters.ts";
-import { withNovel } from "./helper.ts";
+import { upsertText, withNovel } from "./helper.ts";
 
 export const relationTools = [
   defineTool({
@@ -46,11 +46,16 @@ export const relationTools = [
           listCharacters(novel.root).map((entry) => entry.id),
           novel.state.currentChapter,
         );
-        const verb = result.created ? "已新建关系" : "已更新关系";
         return {
-          text: `${verb} ${result.id}（${params.from} → ${params.to}）。`,
+          text: upsertText({
+            label: "关系",
+            id: result.id,
+            name: `${params.from} → ${params.to}`,
+            created: result.created,
+            changes: result.changes,
+          }),
           target: "relations.json",
-          details: { id: result.id, created: result.created },
+          details: { id: result.id, created: result.created, changes: result.changes },
         };
       });
     },

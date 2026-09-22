@@ -7,6 +7,7 @@
  */
 
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { renderChanges, type FieldChange } from "../data/diff.ts";
 import { DataError, errorText } from "../data/errors.ts";
 import { logOperation } from "../data/log.ts";
 import { openNovelStrict, type OpenNovel } from "../data/novel.ts";
@@ -98,4 +99,26 @@ function failWith(op: string, text: string): ToolResult {
 /** 章节索引文件的展示用相对路径。 */
 export function indexLabel(dir: string): string {
   return `${dir}/index.json`;
+}
+
+/**
+ * 渲染一次 upsert 的结果文本（见 docs/design/data.md「写入结果的 diff 摘要」）。
+ *
+ * 三种情形分开写是有意的：
+ * - 新建没有 diff，说清建了什么；
+ * - 「没有实际变化」值得明说 —— 用户以为改了其实没改，是最需要被指出的一种结果；
+ * - 有变化就列 diff，用户据此才能说「第 3 条别动」。
+ */
+export function upsertText(options: {
+  label: string;
+  id: string;
+  name: string;
+  created: boolean;
+  changes: readonly FieldChange[];
+}): string {
+  if (options.created) return `已新建${options.label} ${options.id}（${options.name}）。`;
+  if (options.changes.length === 0) {
+    return `${options.label} ${options.id} 没有实际变化（传入的值与现有值相同）。`;
+  }
+  return `已更新${options.label} ${options.id}：\n${renderChanges(options.changes)}`;
 }

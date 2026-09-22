@@ -7,6 +7,7 @@
 
 import { NAMES, relationsPath } from "./paths.ts";
 import { assertExtended, readDocOrNull, writeDoc } from "./doc.ts";
+import { diffFields, type FieldChange } from "./diff.ts";
 import { nextId, requireId } from "./ids.ts";
 import { DataError } from "./errors.ts";
 import { emptyRelations, RelationsDocSchema, type Relation, type RelationStatus } from "./schema.ts";
@@ -25,6 +26,8 @@ export interface UpsertRelationInput {
 export interface UpsertRelationResult {
   id: string;
   created: boolean;
+  /** 更新时的字段变化；新建时为空数组。 */
+  changes: FieldChange[];
 }
 
 export function listRelations(root: string): Relation[] {
@@ -62,7 +65,29 @@ export function upsertRelation(
   const relations = previous === undefined ? [...doc.relations, relation] : doc.relations.map((x) => (x.id === id ? relation : x));
   writeDoc(path, RelationsDocSchema, { ...doc, relations }, NAMES.relations);
 
-  return { id, created };
+  const changes = diffFields(
+    previous === undefined
+      ? undefined
+      : {
+          from: previous.from,
+          to: previous.to,
+          type: previous.type,
+          directed: previous.directed,
+          status: previous.status,
+          since: previous.since,
+        },
+    {
+      from: relation.from,
+      to: relation.to,
+      type: relation.type,
+      directed: relation.directed,
+      status: relation.status,
+      since: relation.since,
+    },
+    ["from", "to", "type", "directed", "status", "since"],
+  );
+
+  return { id, created, changes };
 }
 
 /** 追加一条关系变更到 `history`，并可顺带更新当前状态。 */

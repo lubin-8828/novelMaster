@@ -193,6 +193,56 @@ export default async function run(): Promise<void> {
   const badEvent = await call("novel_state_update", { currentEventId: "E-099" });
   check("currentEventId 引用不存在的事件被拒绝", badEvent.isError);
 
+  /* ---------------- diff 摘要 ---------------- */
+
+  section("工具层：diff 摘要");
+
+  const newItem = await call("novel_setting_upsert", {
+    name: "新条目",
+    category: "item",
+    summary: "初始摘要",
+    body: "初始详述。",
+  });
+  check("新建的返回文本说清建了什么", newItem.text.includes("已新建设定条目") && newItem.text.includes("新条目"));
+  check("新建的返回文本不含 diff", !newItem.text.includes("→"));
+
+  const changed = await call("novel_setting_upsert", {
+    id: "S-002",
+    name: "新条目",
+    category: "item",
+    summary: "改过的摘要",
+    body: "初始详述。",
+  });
+  check("更新的返回文本列出变化字段", changed.text.includes("summary") && changed.text.includes("初始摘要") && changed.text.includes("改过的摘要"));
+  check("diff 用 → 表示变化方向", changed.text.includes("→"));
+  check("details 里也带 changes（供上游消费）", Array.isArray(changed.details.changes));
+
+  const sameAgain2 = await call("novel_setting_upsert", {
+    id: "S-002",
+    name: "新条目",
+    category: "item",
+    summary: "改过的摘要",
+    body: "初始详述。",
+  });
+  check("无实际变化时明确告知（而不是报「已更新」）", sameAgain2.text.includes("没有实际变化"));
+
+  const deprecated2 = await call("novel_setting_upsert", {
+    id: "S-002",
+    name: "新条目",
+    category: "item",
+    summary: "改过的摘要",
+    body: "初始详述。",
+    tags: ["甲"],
+    deprecated: true,
+  });
+  check("工具能废止条目", deprecated2.text.includes("deprecated") && deprecated2.text.includes("是"));
+  check("工具能写 tags", deprecated2.text.includes("tags") && deprecated2.text.includes("甲"));
+
+  const newPerson = await call("novel_character_upsert", { name: "王五", role: "minor" });
+  check("人物新建也走同一套渲染", newPerson.text.includes("已新建人物") && newPerson.text.includes("王五"));
+  const personChanged = await call("novel_character_upsert", { id: "C-001", name: "李明", role: "protagonist", status: "dead" });
+  check("人物更新返回 diff", personChanged.text.includes("status") && personChanged.text.includes("→"));
+
   /* ---------------- 连续失败熔断 ---------------- */
 
   section("工具层：连续失败熔断");

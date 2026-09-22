@@ -64,6 +64,7 @@ UI 形态受 pi 约束：输入框是 pi 的编辑器，命令必须以 `/` 开�
 |----|------|-----------|
 | **CLI 入口**（`src/cli.ts`） | 建运行时、拼扩展、起 `InteractiveMode` | 业务 |
 | **命令层**（`src/extension/commands.ts`） | 解析命令、切层面、驱动流程、调用下层 | 不讲道理，不拼提示词 |
+| **层面装载**（`src/extension/layer-data.ts`） | 按层面读该层索引，渲染成给 AI 与给人共用的清单 | 不做写入，不碰详述 |
 | **流程层**（`pipeline.md`） | 章状态机、审查编排、回填闸门 | 不碰文件格式 |
 | **上下文装配器**（`src/ai/context-assembler.ts`） | 把磁盘数据装成上下文包 | 不知道谁调用它 |
 | **AI 层**（`src/ai/`） | 会话工厂、子 agent 拓扑、提示词 | 不做文件 I/O 决策 |
@@ -86,6 +87,7 @@ novelMaster/
 │   │   ├── layers.ts             # 层面定义 + 命令表 + 当前层面状态
 │   │   ├── commands.ts           # 命令注册与实现
 │   │   ├── render.ts             # /help、层面段、项目段、状态栏的文本渲染
+│   │   ├── layer-data.ts         # 按层面装载该层索引摘要（给 AI 也给人）
 │   │   └── prompt-sections.ts    # before_agent_start 注入
 │   ├── data/
 │   │   ├── paths.ts              # 根目录解析、文件名常量与路径构造、应用配置
@@ -93,6 +95,7 @@ novelMaster/
 │   │   ├── schema.ts             # typebox 定义 + Static 推导的类型 + 校验辅助
 │   │   ├── io.ts                 # 原子写、追加写、JSON 读写
 │   │   ├── doc.ts                # 带 schema 校验的文档读写 + 追加式数组断言
+│   │   ├── diff.ts               # 字段差异计算（写入结果的可读摘要）
 │   │   ├── md.ts                 # md 区段追加/替换、保行断言、文档合成
 │   │   ├── ids.ts                # ID 分配与永不复用、章节号补零
 │   │   ├── log.ts                # operations.jsonl 操作留痕
@@ -118,6 +121,7 @@ novelMaster/
 │   ├── harness.ts                # check / section / 失败计数
 │   ├── all.ts                    # 测试入口（npm test）
 │   ├── smoke.ts                  # 扩展装配、层面表、提示词注入、文档一致性
+│   ├── layers.ts                 # 层面数据装载与进层面时的用户清单
 │   ├── data.ts                   # 数据层（schema / ID / 追加式 / 状态机）
 │   └── tools.ts                  # 工具层与写入护栏
 ├── docs/design/                  # 设计子文档

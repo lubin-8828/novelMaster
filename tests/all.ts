@@ -7,10 +7,12 @@
 
 import { finish } from "./harness.ts";
 import runSmoke from "./smoke.ts";
+import runLayers from "./layers.ts";
 import runData from "./data.ts";
 import runTools from "./tools.ts";
 
 await runSmoke();
+await runLayers();
 runData();
 await runTools();
 

@@ -6,7 +6,7 @@ import { defineTool } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { STRICT } from "../data/schema.ts";
 import { appendCharacterTimeline, upsertCharacter } from "../data/characters.ts";
-import { withNovel } from "./helper.ts";
+import { upsertText, withNovel } from "./helper.ts";
 
 const STATIC_FIELDS = {
   age: Type.Optional(Type.Union([Type.Integer({ minimum: 0 }), Type.Null()])),
@@ -67,11 +67,16 @@ export const characterTools = [
           },
           novel.state.currentChapter,
         );
-        const verb = result.created ? "已新建人物" : "已更新人物";
         return {
-          text: `${verb} ${result.id}（${params.name}）。`,
+          text: upsertText({
+            label: "人物",
+            id: result.id,
+            name: params.name,
+            created: result.created,
+            changes: result.changes,
+          }),
           target: `characters/${result.id}.md`,
-          details: { id: result.id, created: result.created },
+          details: { id: result.id, created: result.created, changes: result.changes },
         };
       });
     },
