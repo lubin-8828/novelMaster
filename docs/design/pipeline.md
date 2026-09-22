@@ -81,6 +81,17 @@ accepted  → 清空上下文 → 询问是否写下一章
 
 **不设自动确认。** 用户没说通过就永远停在这一步。
 
+**实现落点**
+
+| 步 | 落点 |
+|----|------|
+| 1 | `/next` 命令的 handler（`src/extension/commands.ts`）：状态不允许时直接拒绝，不进流程 |
+| 2 | `assemble(novel, currentChapter)`（`src/ai/context-assembler.ts`） |
+| 3 | `renderNextTask(bundle)`（`src/extension/render.ts`），用 `pi.sendMessage` 发进对话 |
+| 4–5 | AI 调 `novel_chapter_outline_write` / `novel_state_update`；**命令本身不写任何文件** |
+
+**为何第 4–5 步不由命令做**：大纲内容是 AI 推演出来的，而「用户确认了没有」是对话里的事实。命令插在中间只会把一次对话拆成两次，还得自己维护一个「等确认」的状态 —— 而那个状态本来就是对话本身。
+
 ---
 
 ## 3. 生成正文
@@ -91,6 +102,17 @@ accepted  → 清空上下文 → 询问是否写下一章
 4. 状态置 `drafted`。
 
 用户在生成中途 Ctrl+C → 状态停在 `outlined`，**不落盘半截正文**。
+
+**实现落点**
+
+| 步 | 落点 |
+|----|------|
+| 1 | `/write` 层的装载（`src/extension/layer-data.ts` 调 `assemble`） |
+| 2 | pi 的流式渲染（本项目不介入） |
+| 3 | AI 调 `novel_chapter_write`（正文校验与两段式确认在 `src/data/chapters.ts`） |
+| 4 | AI 调 `novel_state_update` |
+
+**第 1 步为何挂在层上而不是命令上**：触发词是用户说的「写吧」，而 `before_agent_start` 无法预先知道哪一句是（也不应该去猜）。把上下文挂在层上，用户在任何一句话里都能让 AI 写 —— 详见 `ai.md「为什么 /write 每回合都要注入完整上下文」`。
 
 ---
 

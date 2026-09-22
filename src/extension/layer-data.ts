@@ -19,6 +19,7 @@ import { listEvents } from "../data/events.ts";
 import { readOutlineBody } from "../data/outline.ts";
 import { readSection } from "../data/md.ts";
 import { chapterNo } from "../data/ids.ts";
+import { assemble } from "../ai/context-assembler.ts";
 import type { OpenNovel } from "../data/novel.ts";
 import type { Layer } from "./layers.ts";
 
@@ -26,6 +27,13 @@ export interface LayerData {
   /** 清单标题，如「设定条目清单（3 条）」。 */
   title: string;
   lines: string[];
+  /**
+   * 只发给**用户**的一行摘要；省略时直接把 `lines` 全文发给他。
+   *
+   * 存在的理由：给 AI 的装载与给人的展示不必等量。`/write` 的装载是几万 token 的
+   * 上下文包（AI 需要），而把它整段发到对话框只会刷屏（人不需要——他有 `/context`）。
+   */
+  userSummary?: string;
 }
 
 /**
@@ -38,6 +46,7 @@ export function loadLayerData(layer: Layer, novel: OpenNovel | null): LayerData 
   if (layer === "person") return personData(novel);
   if (layer === "outline") return outlineData(novel);
   if (layer === "event") return eventData(novel);
+  if (layer === "write") return writeData(novel);
   return null;
 }
 
@@ -186,4 +195,33 @@ function trimBlank(lines: readonly string[]): string[] {
   while (result.length > 0 && (result[0] ?? "").trim() === "") result.shift();
   while (result.length > 0 && (result[result.length - 1] ?? "").trim() === "") result.pop();
   return result;
+}
+
+/**
+ * 写作层装载**完整的上下文包**（九段全文）。
+ *
+ * 与其它层相反：它们给索引摘要，这里给全文。理由见 ai.md —— 这一层每回合都可能是
+ * 「写吧」，而 `before_agent_start` 无法预知哪一句是（也不应该猜）。代价是每句话都带上
+ * 这份上下文，用「干完就走」的使用方式对冲（层规则里写明）。
+ *
+ * 用的是与 `/context` 同一个 `assemble()`：不会出现「你看到的与 AI 看到的不一样」。
+ */
+function writeData(novel: OpenNovel): LayerData {
+  const bundle = assemble(novel, novel.state.currentChapter);
+  const lines: string[] = [];
+  bundle.segments.forEach((segment, index) => {
+    lines.push(`【${index + 1}】${segment.title}`, "", segment.content, "");
+  });
+  lines.push(
+    `（以上共 ${bundle.segments.length} 段、约 ${bundle.totalEstimatedTokens} tokens。` +
+      `用 /context 看每段的大小与来源。）`,
+  );
+  return {
+    title: "本章上下文包",
+    lines,
+    userSummary:
+      `第 ${novel.state.currentChapter} 章的上下文包已装载：${bundle.segments.length} 段、约 ${bundle.totalEstimatedTokens} tokens。\n\n` +
+      `用 /context 看每段的大小与来源；用 /context <段名> 看单段全文；用 /next 推演本章大纲。` +
+      `\n\n（这份包不再刷屏 —— 它每回合都会完整注入给 AI。）`,
+  };
 }

@@ -65,6 +65,7 @@ export default async function run(): Promise<void> {
 
   const baseline = renderBaseline(novel);
   check("基线含书名", baseline.includes("讨论书"));
+  check("基线含小说根绝对路径（子会话要按它读文件）", baseline.includes(novel.root));
   check("基线含核心想法原文", baseline.includes("海洋学家发现海底有规律的信号"));
   check("基线含大纲正文", baseline.includes("信号是一种语言"));
   check("基线含事件清单与阶段", baseline.includes("E-001") && baseline.includes("第一幕"));
@@ -90,7 +91,7 @@ export default async function run(): Promise<void> {
 
   section("讨论：编排");
 
-  const allOk = await discuss({ novel, angle: "如果主角是内鬼", roles: ROLES }, OK_RUNNER);
+  const allOk = await discuss({ novel, cwd: "/tmp/fake-cwd", angle: "如果主角是内鬼", roles: ROLES }, OK_RUNNER);
   check("全部产出时不算致命", !allOk.fatal);
   check("每个角色一份产出", allOk.outcomes.length === 3);
   check("产出归到正确的角色", allOk.outcomes[0]?.role.name === "结构视角");
@@ -99,7 +100,7 @@ export default async function run(): Promise<void> {
 
   const missingRunner: RoleRunner = async (role) =>
     role.name === "冲突视角" ? { kind: "missing", detail: "模型没有调用 submit_brainstorm" } : onePoint(role.name);
-  const withMissing = await discuss({ novel, angle: "方向", roles: ROLES }, missingRunner);
+  const withMissing = await discuss({ novel, cwd: "x", angle: "方向", roles: ROLES }, missingRunner);
   check("未产出不算致命", !withMissing.fatal);
   check("未产出的角色被标为 missing", withMissing.outcomes.find((o) => o.role.name === "冲突视角")?.status === "missing");
   check("未产出带原因", (withMissing.outcomes.find((o) => o.role.name === "冲突视角")?.detail ?? "").includes("submit_brainstorm"));
@@ -107,14 +108,14 @@ export default async function run(): Promise<void> {
 
   const fatalRunner: RoleRunner = async (role) =>
     role.name === "节奏视角" ? { kind: "fatal", detail: "子会话起不来" } : onePoint(role.name);
-  const withFatal = await discuss({ novel, angle: "方向", roles: ROLES }, fatalRunner);
+  const withFatal = await discuss({ novel, cwd: "x", angle: "方向", roles: ROLES }, fatalRunner);
   check("设施失败标记为致命", withFatal.fatal);
   check("失败角色状态为 fatal", withFatal.outcomes.find((o) => o.role.name === "节奏视角")?.status === "fatal");
 
   const throwingRunner: RoleRunner = async () => {
     throw new Error("连接被重置");
   };
-  const threw = await discuss({ novel, angle: "方向", roles: ROLES }, throwingRunner);
+  const threw = await discuss({ novel, cwd: "x", angle: "方向", roles: ROLES }, throwingRunner);
   check("runner 抛错按致命处理（不猜它想表达什么）", threw.fatal);
   check("抛错详情被带出", (threw.outcomes[0]?.detail ?? "").includes("连接被重置"));
 
@@ -127,11 +128,23 @@ export default async function run(): Promise<void> {
     active -= 1;
     return onePoint(role.name);
   };
-  await discuss({ novel, angle: "方向", roles: ROLES }, concurrentRunner);
+  await discuss({ novel, cwd: "x", angle: "方向", roles: ROLES }, concurrentRunner);
   check("角色并发执行（同时在跑数 > 1）", maxActive > 1, `最大同时在跑 ${maxActive}`);
 
+  const seenCwd: string[] = [];
+  const cwdRunner: RoleRunner = async (role, context) => {
+    seenCwd.push(context.cwd);
+    return onePoint(role.name);
+  };
+  await discuss({ novel, cwd: "/main/cwd", angle: "方向", roles: ROLES }, cwdRunner);
+  check(
+    "runner 拿到的是**主会话 cwd**（config.json 所在），不是小说根",
+    seenCwd.every((value) => value === "/main/cwd"),
+    seenCwd.join(","),
+  );
+
   let progress = 0;
-  await discuss({ novel, angle: "方向", roles: ROLES, onProgress: () => { progress += 1; } }, OK_RUNNER);
+  await discuss({ novel, cwd: "x", angle: "方向", roles: ROLES, onProgress: () => { progress += 1; } }, OK_RUNNER);
   check("进度按角色逐一上报", progress === 3);
 
   check("角色超时是有限值（不会无限等）", ROLE_TIMEOUT_MS > 0 && ROLE_TIMEOUT_MS <= 300_000, String(ROLE_TIMEOUT_MS));

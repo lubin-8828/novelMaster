@@ -41,6 +41,7 @@ export const brainstormTools = [
       return withNovel(ctx, "novel_brainstorm", async (novel) => {
         const result = await discuss({
           novel,
+          cwd: ctx.cwd,
           angle: params.angle,
           roles: params.perspectives,
           onProgress: (done, total, role) => {

@@ -108,6 +108,41 @@ function pickSegment(segments: readonly Segment[], focus: string): Segment | nul
   return segments.find((item) => item.key === focus || item.title === focus) ?? null;
 }
 
+/**
+ * `/next` 的任务段。
+ *
+ * 两件事：把上下文交给 AI，把「这一回合要产出什么」说清楚。
+ *
+ * **不把「等用户确认」写成流程控制** —— 那是对话里的事实，不是代码状态。
+ * 命令只说清「做完要等确认」，确认本身由用户的话决定。
+ */
+export function renderNextTask(bundle: ContextBundle): string {
+  const lines = [
+    `【任务】推演第 ${chapterNo(bundle.chapter)} 章的章节大纲`,
+    "",
+    "要求：",
+    "1. 大纲开头写结构化头块 —— 它决定这套上下文包下次会带入哪些人物与设定：",
+    "",
+    "   <!-- novelmaster:outline",
+    "   characters: [C-001, ...]",
+    "   settings: [S-001, ...]",
+    "   events: [E-003]",
+    "   primaryEvent: E-003",
+    "   -->",
+    "",
+    "2. 头块之后写大纲正文：本章推进什么、在哪里结束、留什么悬念。",
+    "3. 用 novel_chapter_outline_write 落盘，**不要传 confirmNote**（那是用户确认后才写的）。",
+    "4. 落盘后把大纲完整呈现给用户，等他的修改意见。**不要说「已确认」** —— 确认与否由用户说。",
+    "",
+    "以下是本章的上下文包（第 9 段「本章大纲」现在是空的，因为还没写）：",
+    "",
+  ];
+  bundle.segments.forEach((segment, index) => {
+    lines.push(`【${index + 1}】${segment.title}`, "", segment.content, "");
+  });
+  return lines.join("\n");
+}
+
 /** 注入系统提示词的项目段。描述小说数据布局与硬规则。 */
 export function renderProjectSection(novelRoot: string, title: string): string {
   return [

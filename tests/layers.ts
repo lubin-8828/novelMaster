@@ -19,6 +19,9 @@ import { upsertRelation } from "../src/data/relations.ts";
 import { upsertEvent } from "../src/data/events.ts";
 import { writeOutline } from "../src/data/outline.ts";
 import { writeConfig } from "../src/data/paths.ts";
+import { statePath } from "../src/data/paths.ts";
+import { readDoc, writeDoc } from "../src/data/doc.ts";
+import { NovelStateSchema } from "../src/data/schema.ts";
 
 const ROOT = join(process.cwd(), ".tmp-layers");
 
@@ -43,8 +46,16 @@ export default async function run(): Promise<void> {
 
   check("未打开小说时不装载", loadLayerData("setting", null) === null);
   check("主菜单层不装载", loadLayerData("menu", novel) === null);
-  check("写作层暂不装载（里程碑 6）", loadLayerData("write", novel) === null);
-
+  const writeData0 = loadLayerData("write", novel);
+  check("写作层已装载（里程碑 7）", writeData0 !== null);
+  const writeText0 = renderLayerData(writeData0!);
+  check("写作层装载完整上下文包（九段全文）", writeText0.includes("【1】") && writeText0.includes("【9】"));
+  check("写作层装载的是段内容、不是总表", !writeText0.includes("（无来源）"));
+  check("写作层给出总段数与 token 量", writeText0.includes("9 段") && writeText0.includes("tokens"));
+  check(
+    "写作层给用户的只有摘要（不刷屏）",
+    (writeData0?.userSummary ?? "").includes("/context") && !(writeData0?.userSummary ?? "").includes("【9】"),
+  );
   const emptyEvent = loadLayerData("event", novel);
   check("事件层已装载（里程碑 5）", emptyEvent !== null);
   const emptyEventText = renderLayerData(emptyEvent!);
@@ -205,8 +216,7 @@ export default async function run(): Promise<void> {
   const personSections = await injectFor("person");
   check("人物层注入人物与关系", personSections["novelmaster-layer-data"]?.includes("C-001") === true && personSections["novelmaster-layer-data"]?.includes("R-001") === true);
 
-  const outlineSections = await injectFor("outline");
-  check("大纲层注入数据段", "novelmaster-layer-data" in outlineSections);
+  const outlineSections = await injectFor("outline");  check("大纲层注入数据段", "novelmaster-layer-data" in outlineSections);
   check("大纲层数据段含大纲正文", outlineSections["novelmaster-layer-data"]?.includes("海底的信号是一种语言") === true);
   check("大纲层数据段不含设定条目（每层只装载该层数据）", outlineSections["novelmaster-layer-data"]?.includes("S-001") !== true);
   check("大纲层仍注入层面段", "novelmaster-layer" in outlineSections);
@@ -241,6 +251,38 @@ export default async function run(): Promise<void> {
   const userOutline = messages.find((m) => m.customType === "novelmaster-layer-data");
   check("进大纲层给用户发了清单", userOutline !== undefined);
   check("大纲层清单与注入给 AI 的是同一份", userOutline?.content === outlineSections["novelmaster-layer-data"]);
+
+  /* ---------------- /next 命令 ---------------- */
+
+  section("/next 命令");
+
+  setLayer("write");
+  messages.length = 0;
+  await commands.get("next")?.("", makeCtx(ROOT));
+  const task = messages.find((m) => m.customType === "novelmaster-task");
+  check("状态允许时发任务段", task !== undefined);
+  check("任务段是推演大纲（含章号）", (task?.content ?? "").includes("推演第") && (task?.content ?? "").includes("章"));
+  check("任务段给出结构化头块的格式", (task?.content ?? "").includes("novelmaster:outline") && (task?.content ?? "").includes("primaryEvent"));
+  check("任务段含完整上下文包（九段）", (task?.content ?? "").includes("【9】"));
+  check("任务段要求不传 confirmNote（那是确认后才写的）", (task?.content ?? "").includes("不要传 confirmNote"));
+  check("任务段明确不许 AI 自己宣告确认", (task?.content ?? "").includes("不要说「已确认」"));
+
+  setLayer("menu");
+  messages.length = 0;
+  await commands.get("next")?.("", makeCtx(ROOT));
+  check("不在写作层时拒绝推演", messages.every((m) => m.customType !== "novelmaster-task"));
+
+  const stateFile = statePath(novelRoot);
+  writeDoc(
+    stateFile,
+    NovelStateSchema,
+    { ...readDoc(stateFile, NovelStateSchema, "state.json"), chapterStatus: "drafted" },
+    "state.json",
+  );
+  setLayer("write");
+  messages.length = 0;
+  await commands.get("next")?.("", makeCtx(ROOT));
+  check("正文已生成时拒绝又推一份新大纲", messages.every((m) => m.customType !== "novelmaster-task"));
 
   /* ---------------- 未打开小说 ---------------- */
 

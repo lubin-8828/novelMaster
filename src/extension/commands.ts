@@ -1,6 +1,6 @@
 import type { ExtensionAPI, ExtensionContext, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { CMD, ENTRY_LAYERS, LAYERS, ALL_COMMANDS, COMMANDS, getLayer, setLayer, type CmdName, type Layer } from "./layers.ts";
-import { renderContext, renderHelp, renderStatus } from "./render.ts";
+import { renderContext, renderHelp, renderNextTask, renderStatus, CHAPTER_STATUS_LABEL } from "./render.ts";
 import { renderLayerData, safeLayerData } from "./layer-data.ts";
 import { assemble } from "../ai/context-assembler.ts";
 import { errorText } from "../data/errors.ts";
@@ -79,6 +79,39 @@ export function registerCommands(pi: ExtensionAPI): void {
     },
   });
 
+  pi.registerCommand(CMD.next, {
+    description: "推演本章大纲，交你确认",
+    handler: async (_args, ctx) => {
+      if (getLayer() !== "write") {
+        ctx.ui.notify("/next 是写作模式的命令。先 /write 进入。", "warning");
+        return;
+      }
+      const novel = openNovel(ctx.cwd);
+      if (novel === null) {
+        ctx.ui.notify("还没有打开小说。先用 /init 新建一本。", "warning");
+        return;
+      }
+
+      // 只允许从「上一章已验收」或「首次进入」推演新大纲。
+      // 在「正文已生成」时又推一份新大纲，会把已经写过的正文悬空。
+      const state = novel.state;
+      if (state.chapterStatus !== "not_started" && state.chapterStatus !== "accepted") {
+        ctx.ui.notify(
+          `第 ${state.currentChapter} 章的状态是「${CHAPTER_STATUS_LABEL[state.chapterStatus]}」，此时不推演新大纲。` +
+            `先把这一章走完（/context 看喂了什么，/done 结章），或直接告诉 AI 你想改什么。`,
+          "warning",
+        );
+        return;
+      }
+
+      try {
+        emit(pi, "novelmaster-task", renderNextTask(assemble(novel, state.currentChapter)));
+      } catch (err) {
+        ctx.ui.notify(`装配上下文失败：${errorText(err)}`, "error");
+      }
+    },
+  });
+
   pi.registerCommand(CMD.init, {
     description: "新建一本小说（书名 / 类型 / 核心想法）",
     handler: async (_args, ctx) => {
@@ -103,7 +136,8 @@ export function registerCommands(pi: ExtensionAPI): void {
           ctx.ui.notify(`进入${LAYERS[layer].label}层。用 /help 看本层命令。`, "info");
           return;
         }
-        emit(pi, "novelmaster-layer-data", renderLayerData(data));
+        // 内容过大的层（`/write`）只发摘要：给 AI 的装载与给人的展示不必等量。
+        emit(pi, "novelmaster-layer-data", data.userSummary ?? renderLayerData(data));
       },
     });
   }

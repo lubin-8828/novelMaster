@@ -54,13 +54,22 @@ export type RoleRunOutcome =
 
 export type RoleRunner = (
   role: RoleSpec,
-  context: { baseline: string; angle: string; novel: OpenNovel },
+  context: { baseline: string; angle: string; novel: OpenNovel; cwd: string },
 ) => Promise<RoleRunOutcome>;
 
 export interface DiscussOptions {
   novel: OpenNovel;
   angle: string;
   roles: readonly RoleSpec[];
+  /**
+   * 子会话的 cwd，**必须是主会话的 cwd，不是小说根**。
+   *
+   * `novel_*` 工具靠 `openNovelStrict(ctx.cwd)` 读 `.novelmaster/config.json` 定位小说；
+   * 如果把它设成小说根，那些工具在子会话里全会报「没有打开小说」—— 而这正好会
+   * 静默削掉「角色需要资料时自己查」这个能力（模型会以为没有工具可用）。
+   * 小说根路径改为写进基线文本，让模型知道去哪读。
+   */
+  cwd: string;
   onProgress?: ((done: number, total: number, role: RoleSpec) => void) | undefined;
 }
 
@@ -73,7 +82,7 @@ export async function discuss(options: DiscussOptions, runner?: RoleRunner): Pro
     options.roles.map(async (role) => {
       let outcome: RoleRunOutcome;
       try {
-        outcome = await run(role, { baseline, angle: options.angle, novel: options.novel });
+        outcome = await run(role, { baseline, angle: options.angle, novel: options.novel, cwd: options.cwd });
       } catch (err) {
         // 走到这里说明 runRole 自己没兜住 —— 当成设施级失败，不猜它想表达什么。
         outcome = { kind: "fatal", detail: errorText(err) };
@@ -100,7 +109,7 @@ function defaultRoleRunner(): RoleRunner {
     const resolved = await resolveModel("brainstorm", context.novel.state);
 
     const result = await runSubSession({
-      cwd: context.novel.root,
+      cwd: context.cwd,
       systemPrompt: renderRoleSystemPrompt(role),
       prompt: renderRolePrompt(context.baseline, context.angle, role),
       // 只给读工具与提交工具。**没有任何写工具** —— 讨论角色不落盘，落盘是主会话的事。

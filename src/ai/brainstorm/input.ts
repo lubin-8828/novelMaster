@@ -25,6 +25,7 @@ export function renderBaseline(novel: OpenNovel): string {
   const events = listEvents(novel.root);
   const lines = [
     `《${novel.meta.title}》`,
+    `小说根目录（绝对路径）：${novel.root}`,
     `类型：${novel.meta.genre.join("、") || "（未定）"}`,
     `核心想法（用户原文，未经改写）：${novel.meta.premise}`,
     `一句话简介：${novel.meta.logline === "" ? "（未定）" : novel.meta.logline}`,
