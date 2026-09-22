@@ -15,6 +15,8 @@
 import { listSettings } from "../data/settings.ts";
 import { listCharacters } from "../data/characters.ts";
 import { listRelations } from "../data/relations.ts";
+import { listEvents } from "../data/events.ts";
+import { readOutlineBody } from "../data/outline.ts";
 import type { OpenNovel } from "../data/novel.ts";
 import type { Layer } from "./layers.ts";
 
@@ -26,12 +28,13 @@ export interface LayerData {
 
 /**
  * 该层的索引摘要。返回 null 表示这一层不需要装载（主菜单），
- * 或该层的装载尚未实现（`/outline` `/event` `/write` 属各自里程碑）。
+ * 或该层的装载尚未实现（`/event` `/write` 属各自里程碑）。
  */
 export function loadLayerData(layer: Layer, novel: OpenNovel | null): LayerData | null {
   if (novel === null) return null;
   if (layer === "setting") return settingData(novel);
   if (layer === "person") return personData(novel);
+  if (layer === "outline") return outlineData(novel);
   return null;
 }
 
@@ -95,4 +98,34 @@ function personData(novel: OpenNovel): LayerData {
   }
 
   return { title: `人物清单（${characters.length} 人，${relations.length} 条关系）`, lines };
+}
+
+/**
+ * 大纲层装载的是**全文**，不是摘要 —— 大纲是本层的工作对象。
+ *
+ * 但**不含「修订记录」**：那是追加式的历史，每改一次加一行，会越长越长，
+ * 而它对「现在该怎么改大纲」没有直接帮助。省下的 token 换来的是更长的可用对话。
+ */
+function outlineData(novel: OpenNovel): LayerData {
+  const lines: string[] = [];
+
+  const body = readOutlineBody(novel.root);
+  lines.push("【主线大纲】", "");
+  if (body === null) lines.push("（大纲文件缺失）");
+  else if (body === "") lines.push("（大纲还是空的）");
+  else lines.push(body);
+
+  const events = listEvents(novel.root);
+  lines.push("", `【事件清单（${events.length} 条）】`, "");
+  if (events.length === 0) {
+    lines.push("（还没有推演出事件。事件在 /event 层做。）");
+  } else {
+    for (const event of events) {
+      const foreshadow = event.origin === "foreshadow" ? "，伏笔" : "";
+      const chapters = event.chapters.length > 0 ? `，涉及 ${event.chapters.length} 章` : "";
+      lines.push(`- ${event.id} [${event.stage}] ${event.title}（${event.status}${foreshadow}${chapters}）`);
+    }
+  }
+
+  return { title: "大纲层数据", lines };
 }

@@ -16,6 +16,7 @@ import { openNovelAt } from "../src/data/novel.ts";
 import { upsertSetting } from "../src/data/settings.ts";
 import { upsertCharacter } from "../src/data/characters.ts";
 import { upsertRelation } from "../src/data/relations.ts";
+import { writeOutline } from "../src/data/outline.ts";
 import { writeConfig } from "../src/data/paths.ts";
 
 const ROOT = join(process.cwd(), ".tmp-layers");
@@ -41,9 +42,17 @@ export default async function run(): Promise<void> {
 
   check("未打开小说时不装载", loadLayerData("setting", null) === null);
   check("主菜单层不装载", loadLayerData("menu", novel) === null);
-  check("大纲层暂不装载（里程碑 4）", loadLayerData("outline", novel) === null);
   check("事件层暂不装载（里程碑 5）", loadLayerData("event", novel) === null);
   check("写作层暂不装载（里程碑 6）", loadLayerData("write", novel) === null);
+
+  const emptyOutline = loadLayerData("outline", novel);
+  check("大纲层已装载（里程碑 4）", emptyOutline !== null);
+  const emptyOutlineText = renderLayerData(emptyOutline!);
+  check("大纲层含【主线大纲】区段", emptyOutlineText.includes("【主线大纲】"));
+  check("新建书的大纲显示占位内容", emptyOutlineText.includes("（待定）"));
+  check("大纲层含事件清单区段", emptyOutlineText.includes("【事件清单（0 条）】"));
+  check("没有事件时指向 /event 层", emptyOutlineText.includes("/event"));
+  check("大纲层不含「修订记录」（历史不进上下文）", !emptyOutlineText.includes("修订记录"));
 
   const emptySetting = loadLayerData("setting", novel);
   check("设定层空清单：标题含条数 0", emptySetting?.title.includes("0 条") === true, emptySetting?.title);
@@ -84,6 +93,32 @@ export default async function run(): Promise<void> {
   check("清单含 lastUpdatedChapter 信息", personText.includes("尚未回填过"));
   check("清单含关系", personText.includes("R-001") && personText.includes("C-001 → C-002"));
   check("关系单独成段", personText.includes("关系："));
+
+  writeOutline(
+    novelRoot,
+    [
+      "# 深海回声 · 故事主线大纲",
+      "",
+      "## 一句话主题",
+      "",
+      "海底的信号是一种语言。",
+      "",
+      "## 阶段划分",
+      "",
+      "第一幕：发现。",
+      "",
+      "## 修订记录",
+      "",
+      "- [2026-01-01 00:00] 这段不该进上下文。",
+      "",
+    ].join("\n"),
+  );
+
+  const outlineLoaded = renderLayerData(loadLayerData("outline", novel)!);
+  check("大纲层注入大纲正文", outlineLoaded.includes("海底的信号是一种语言"));
+  check("大纲层注入阶段划分", outlineLoaded.includes("第一幕：发现"));
+  check("大纲层注入时丢掉修订记录", !outlineLoaded.includes("这段不该进上下文"));
+  check("大纲层含事件清单区段", outlineLoaded.includes("【事件清单"));
 
   /* ---------------- 注入 ---------------- */
 
@@ -131,7 +166,9 @@ export default async function run(): Promise<void> {
   check("人物层注入人物与关系", personSections["novelmaster-layer-data"]?.includes("C-001") === true && personSections["novelmaster-layer-data"]?.includes("R-001") === true);
 
   const outlineSections = await injectFor("outline");
-  check("大纲层本里程碑不注入数据段", !("novelmaster-layer-data" in outlineSections));
+  check("大纲层注入数据段", "novelmaster-layer-data" in outlineSections);
+  check("大纲层数据段含大纲正文", outlineSections["novelmaster-layer-data"]?.includes("海底的信号是一种语言") === true);
+  check("大纲层数据段不含设定条目（每层只装载该层数据）", outlineSections["novelmaster-layer-data"]?.includes("S-001") !== true);
   check("大纲层仍注入层面段", "novelmaster-layer" in outlineSections);
 
   /* ---------------- 进层面时的用户清单 ---------------- */
@@ -156,7 +193,9 @@ export default async function run(): Promise<void> {
 
   messages.length = 0;
   await commands.get("outline")?.("", makeCtx(ROOT));
-  check("进大纲层不发数据清单（还没有可发的）", messages.every((m) => m.customType !== "novelmaster-layer-data"));
+  const userOutline = messages.find((m) => m.customType === "novelmaster-layer-data");
+  check("进大纲层给用户发了清单", userOutline !== undefined);
+  check("大纲层清单与注入给 AI 的是同一份", userOutline?.content === outlineSections["novelmaster-layer-data"]);
 
   /* ---------------- 未打开小说 ---------------- */
 

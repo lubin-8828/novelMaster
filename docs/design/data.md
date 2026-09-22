@@ -410,6 +410,7 @@ primaryEvent: E-003
 | 工具 | 用途 | 关键参数 |
 |------|------|----------|
 | `novel_read_index` | 读某一类资料的索引（设定/人物/关系/事件/章节） | `kind` |
+| `novel_meta_update` | 更新元信息（一句话简介 / 视角 / 时态） | `logline?`, `pov?`, `tense?` |
 | `novel_setting_upsert` | 新增或更新设定条目 | `id?`, `name`, `category`, `summary`, `body`, `establishedIn?`, `tags?`, `deprecated?` |
 | `novel_setting_append_revision` | 往设定条目追加修订记录 | `id`, `chapter`, `text` |
 | `novel_character_upsert` | 新增或更新人物（静态档案 + 状态） | `id?`, `name`, `aliases?`, `role`, `status?`, `firstAppeared?`, `static?`, `body?` |
@@ -435,7 +436,9 @@ primaryEvent: E-003
 
 表格之外的参数细节，这些是「枚举值写死在代码里」的落点 —— 让 LLM 自造枚举值是另一种形式的结构漂移：
 
-**共 19 个 `novel_*` 工具**，全部一次性注册。两个专属于子会话的工具（`submit_findings` / `submit_brainstorm`）不在里程碑 2 范围内，分别在里程碑 8 与 11 交付。
+**共 20 个 `novel_*` 工具**，全部一次性注册。两个专属于子会话的工具（`submit_findings` / `submit_brainstorm`）不在里程碑 2 范围内，分别在里程碑 8 与 11 交付。
+
+`novel_meta_update` 只改 `logline` / `pov` / `tense` 这三个「整理后的元信息」。**不改 `title`**：书名对应目录名 `slug`，改名会连带旧目录、旧报告里的书名、以及对外的所有引用一起变，而这是一项独立的、需要用户明确确认的操作 —— 混在一次普通修改里做，会出现「只想改个简介结果书目录换了」。
 
 几条不写在参数表里、但会改变工具行为的约束：
 

@@ -9,6 +9,7 @@
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { readTools } from "./read.ts";
+import { metaTools } from "./meta.ts";
 import { settingTools } from "./setting.ts";
 import { characterTools } from "./character.ts";
 import { relationTools } from "./relation.ts";
@@ -19,6 +20,7 @@ import { stateTools } from "./state.ts";
 
 export const ALL_TOOLS = [
   ...readTools,
+  ...metaTools,
   ...settingTools,
   ...characterTools,
   ...relationTools,

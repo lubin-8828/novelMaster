@@ -8,6 +8,8 @@ import { mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { check, errorOf, section, throws } from "./harness.ts";
 import { initNovel } from "../src/data/init.ts";
+import { openNovelAt } from "../src/data/novel.ts";
+import { updateMeta } from "../src/data/meta.ts";
 import {
   assertSchema,
   CHARACTER_ROLES,
@@ -411,6 +413,29 @@ export default function run(): void {
   // R-001 的 status 在前面的测试里已经是 broken，所以这里测 broken → ended。
   const r1Changed = upsertRelation(root, { id: "R-001", from: "C-001", to: "C-002", type: "subordinate", status: "ended" }, ["C-001", "C-002"], 1);
   check("关系更新产生 diff", r1Changed.changes.some((c) => c.field === "status" && c.from === "broken" && c.to === "ended"));
+
+  /* ---------------- 元信息 ---------------- */
+
+  section("元信息");
+
+  check("初始 logline 为空", openNovelAt(root)?.meta.logline === "");
+  check("初始 pov / tense 有默认值", openNovelAt(root)?.meta.pov === "第三人称限知" && openNovelAt(root)?.meta.tense === "过去时");
+
+  const metaChange = updateMeta(root, { logline: "一段深海信号引出的真相。", pov: "第三人称限知", tense: "过去时" });
+  check("更新 logline 产生 diff", metaChange.changes.some((c) => c.field === "logline"));
+  check("未变字段不入 diff", !metaChange.changes.some((c) => c.field === "pov" || c.field === "tense"));
+  check("logline 已落盘", openNovelAt(root)?.meta.logline === "一段深海信号引出的真相。");
+
+  check("传入相同值时无 diff", updateMeta(root, { logline: "一段深海信号引出的真相。" }).changes.length === 0);
+
+  const metaPov = updateMeta(root, { pov: "第一人称" });
+  check("可改 pov", openNovelAt(root)?.meta.pov === "第一人称" && metaPov.changes.some((c) => c.field === "pov"));
+  check("改 pov 不影响 logline", openNovelAt(root)?.meta.logline === "一段深海信号引出的真相。");
+  check("可改 tense", updateMeta(root, { tense: "现在时" }).changes.some((c) => c.field === "tense"));
+
+  check("meta 更新不改 premise（一切推断的根）", openNovelAt(root)?.meta.premise === "一个测试用的小说。");
+  check("meta 更新不改 title（书名对应目录名）", openNovelAt(root)?.meta.title === "测试书");
+  check("meta 更新不动其他字段的 schemaVersion", openNovelAt(root)?.meta.schemaVersion === 1);
 
   /* ---------------- 章状态机 ---------------- */
 

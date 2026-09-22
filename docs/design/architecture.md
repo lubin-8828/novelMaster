@@ -102,13 +102,14 @@ novelMaster/
 │   │   ├── state.ts              # 章状态机转移表 + 状态更新校验
 │   │   ├── init.ts               # 新建一本小说（目录树 + 初始文件 + slug）
 │   │   ├── novel.ts              # 打开小说（宽容版 / 严格版）
-│   │   ├── settings.ts  characters.ts  relations.ts  events.ts  chapters.ts  inbox.ts
+│   │   ├── meta.ts               # 元信息写入（logline / pov / tense）
+│   │   ├── settings.ts  characters.ts  relations.ts  events.ts  chapters.ts  inbox.ts  outline.ts
 │   │   └── validate.ts           # 依据引用校验                  ← 里程碑 8
 │   ├── tools/                    # pi custom tools（LLM 唯一写入口）
 │   │   ├── index.ts              # 注册全部 novel_* 工具
 │   │   ├── guard.ts              # 护栏：拦 write/edit 写小说根（不动 shell）
 │   │   ├── helper.ts             # withNovel / 错误文本 / 留痕封装 / 失败计数
-│   │   └── read.ts  setting.ts  character.ts  relation.ts  outline.ts  event.ts  chapter.ts  state.ts  inbox.ts
+│   │   └── read.ts  setting.ts  character.ts  relation.ts  outline.ts  meta.ts  event.ts  chapter.ts  state.ts  inbox.ts
 │   ├── ai/
 │   │   ├── session-factory.ts    # 主会话 / 只读子会话            ← 里程碑 7
 │   │   ├── models.ts             # 按用途取模型                  ← 里程碑 7

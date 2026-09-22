@@ -4,9 +4,9 @@
 
 import { defineTool } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { readText, writeTextAtomic } from "../data/io.ts";
-import { NAMES, inboxPath, outlinePath } from "../data/paths.ts";
-import { appendUnderSection, readSectionLines, stamp, stripSection } from "../data/md.ts";
+import { NAMES, inboxPath } from "../data/paths.ts";
+import { readText } from "../data/io.ts";
+import { appendOutlineRevision, writeOutline } from "../data/outline.ts";
 import { appendInbox } from "../data/inbox.ts";
 import { DataError } from "../data/errors.ts";
 import { STRICT } from "../data/schema.ts";
@@ -25,12 +25,7 @@ export const outlineTools = [
     ),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       return withNovel(ctx, "novel_outline_write", (novel) => {
-        const path = outlinePath(novel.root);
-        const existing = readText(path);
-        const revisions = existing === null ? [] : readSectionLines(existing, "修订记录");
-        const body = stripSection(params.markdown, "修订记录").trim();
-        const text = [body, "", "## 修订记录", ...revisions, ""].join("\n");
-        writeTextAtomic(path, text);
+        writeOutline(novel.root, params.markdown);
         return { text: "已覆盖写入主线大纲，「修订记录」原样保留。", target: NAMES.outline };
       });
     },
@@ -43,7 +38,7 @@ export const outlineTools = [
     parameters: Type.Object({ text: Type.String({ description: "这次的修订内容" }) }, STRICT),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       return withNovel(ctx, "novel_outline_append_revision", (novel) => {
-        appendUnderSection(outlinePath(novel.root), "修订记录", [`- [${stamp()}] ${params.text}`]);
+        appendOutlineRevision(novel.root, params.text);
         return { text: "已往主线大纲的修订记录追加一行。", target: NAMES.outline };
       });
     },

@@ -58,6 +58,7 @@ export const LAYERS: Record<Layer, LayerSpec> = {
       "本层只讨论与维护世界观设定条目：世界规则（world_rule）、地点（location）、势力（faction）、物品（item）、禁忌（taboo）。",
       "不要写正文，不要改大纲或事件。",
       "数据位置：setting/index.json 是索引，setting/S-xxx.md 是条目详述。ID 形如 S-001，一经分配永不复用；废弃条目改为 deprecated 而不是删除（历史审查报告可能引用它）。",
+      "每次落盘后，把工具返回的变更摘要（改了什么、从什么变成什么）**原样**汇报给用户。不要只说「已更新」，也不要自己重写摘要 —— 那段摘要就是用户用来判断「改动对不对」的依据。",
     ].join("\n"),
   },
   person: {
@@ -69,6 +70,7 @@ export const LAYERS: Record<Layer, LayerSpec> = {
       "静态档案是「当前结论」，可以直接修正笔误；时间轴和关系变更史是「历史事实」，只追加、不修改。",
       "时间轴只记关键事件，不记流水账。",
       "数据位置：characters/index.json（档案与状态）、characters/C-xxx.md（时间轴）、relations.json（关系）。",
+      "每次落盘后，把工具返回的变更摘要**原样**汇报给用户（同设定层的约定）。",
     ].join("\n"),
   },
   outline: {
@@ -78,7 +80,10 @@ export const LAYERS: Record<Layer, LayerSpec> = {
       "你处在「故事大纲层」。",
       "本层只讨论主线结构：一句话主题、阶段划分、主要冲突、结局走向。不要写正文，不要细化到章节。",
       "创建大纲必须与用户交互进行 —— 逐段提出、逐段确认，不要一次性产出一份完整大纲让用户被动接受。",
-      "每次修改都往 outline.md 底部的「修订记录」追加一行。",
+      "推鑫定的一句话简介用 novel_meta_update 写进 logline；视角（pov）与时态（tense）也在本层定下，它们是审查判定「视角越界」「人称漂移」的依据，不要留空。",
+      "大纲正文用 novel_outline_write 覆盖写入（它会原样保留底部的「修订记录」）；每次修改再往修订记录追加一行。",
+      "每次落盘后，把工具返回的变更摘要**原样**汇报给用户（同设定层的约定）。",
+      "数据位置：outline.md（正文 + 修订记录）、meta.json（logline / pov / tense）。",
     ].join("\n"),
   },
   event: {

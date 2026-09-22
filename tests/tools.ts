@@ -81,7 +81,7 @@ export default async function run(): Promise<void> {
 
   novelMasterExtension(pi);
 
-  check("注册了 19 个 novel_* 工具", TOOL_NAMES.length === 19, `实际 ${TOOL_NAMES.length}：${TOOL_NAMES.join(", ")}`);
+  check("注册了 20 个 novel_* 工具", TOOL_NAMES.length === 20, `实际 ${TOOL_NAMES.length}：${TOOL_NAMES.join(", ")}`);
   check("工具名无重复", new Set(TOOL_NAMES).size === TOOL_NAMES.length);
   check("工具名都以 novel_ 开头", TOOL_NAMES.every((name) => name.startsWith("novel_")));
   check("注册了 tool_call 护栏钩子", handlers.has("tool_call"));
@@ -242,6 +242,17 @@ export default async function run(): Promise<void> {
   check("人物新建也走同一套渲染", newPerson.text.includes("已新建人物") && newPerson.text.includes("王五"));
   const personChanged = await call("novel_character_upsert", { id: "C-001", name: "李明", role: "protagonist", status: "dead" });
   check("人物更新返回 diff", personChanged.text.includes("status") && personChanged.text.includes("→"));
+
+  /* ---------------- 元信息 ---------------- */
+
+  section("工具层：元信息");
+
+  const metaUpdated = await call("novel_meta_update", { logline: "深海信号引出的真相。" });
+  check("meta 工具可更新 logline", !metaUpdated.isError && metaUpdated.text.includes("logline"));
+  check("meta 工具返回 diff", metaUpdated.text.includes("→"));
+  check("meta 工具无变化时明确告知", (await call("novel_meta_update", { logline: "深海信号引出的真相。" })).text.includes("没有实际变化"));
+  check("meta 工具参数不接受 title（改书名是另一回事）", !Value.Check(toolByName("novel_meta_update").parameters, { title: "新书名" }));
+  check("meta 工具接受空白调用但报无变化", (await call("novel_meta_update", {})).text.includes("没有实际变化"));
 
   /* ---------------- 连续失败熔断 ---------------- */
 
