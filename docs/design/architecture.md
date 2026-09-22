@@ -196,11 +196,26 @@ npm install          # 148 个包，无原生模块构建步骤
 
 | 命令 | 作用 |
 |------|------|
-| `npm start` | 启动 TUI（等价 `node src/cli.ts`） |
-| `./start.sh` | 同上，但带前置检查（Node 版本 / 依赖 / **是否在交互终端里**） |
+| `novelmaster` | 启动 TUI（**全局命令**，先跑一次 `npm link` 装它）。与 `pi` 同一形式 |
+| `npm start` | 同上，等价 `node src/cli.ts`（不装全局命令时用） |
+| `./start.sh` | 同上，但带前置检查（Node 版本 / 依赖 / **是否在交互终端里**）并写 pidfile |
 | `./stop.sh` | 从**另一个终端**停止。正常退出在 TUI 里 Ctrl+C 或 `/quit` 就行 |
 | `npm test` | 全部测试（等价 `node tests/all.ts`），不启动 TUI |
 | `npm run typecheck` | `tsc --noEmit`，纯类型检查 |
+
+**装全局命令**：
+
+```bash
+cd <项目目录> && npm link      # 在 $PREFIX/bin 里建一个指向 bin/novelmaster.mjs 的符号链接
+```
+
+`bin/` 入口只有 3 行（`import "../src/cli.ts"`）—— 没有构建步骤，所以它不需要 `dist/`，也不需要打包。
+
+**`novelmaster` 与 `start.sh` 的分工**：前者是日常启动（直接进 TUI），后者多了前置检查与 pidfile（所以 `stop.sh` 能停它）。两个都在，不要重复实现：`start.sh` 不重写启动逻辑，它只是「检查完把终端交给你」。
+
+**一个必须知道的事实：`cwd` 决定小说存在哪。** `novels/<slug>/` 与 `.novelmaster/config.json` 都在**运行目录**下（见 `data.md「目录树」`）。所以在项目目录敲 `novelmaster` 与在家目录敲，看到的是**两套书**——不是同一本。
+
+这是刻意的：单机单用户、每本小说一个自包含目录，便于备份与搬移。**但它的代价是「换个目录书就没了」的那种惊吓**，所以使用建议：**固定在一个目录里用它**（比如项目目录，或专门建一个 `~/写小说/`）。
 
 **为什么 `start.sh` 不做成后台 daemon。** novelMaster 是 **TUI，不是服务** —— 它要一个交互终端（用户得看着界面输入）。后台启动的结果是「进程活着，但你既看不到界面也没法输入」，所以脚本遇到非 TTY 会**直接拒绝并给出 tmux 方案**，而不是起一个不响应的进程让人发呆。想常驻（手机息屏后还在）就用 tmux：
 
