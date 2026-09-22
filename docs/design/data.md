@@ -543,4 +543,6 @@ primaryEvent: E-003
 
 **为什么用转述而不是阻断式闸门**（像正文校验那样）：资料层的改动是**用户自己要求的**，不是 AI 自主决定的，所以不需要额外的拍板环节；而阻断会强制 LLM 再调一次工具，对「改个摘要」这种操作太重。两种场合的区别在于「谁发起的改动」，不在于「改动大不大」。
 
-**已实现的工具**：`novel_setting_upsert`、`novel_character_upsert`、`novel_relation_upsert`（里程碑 3）。事件、章节类的写工具在各自的里程碑补 —— 但规格是全局的：**新增任何 upsert 类工具都要走 `diffFields` + `upsertText`**，否则「改了却没报」就成了一种静默行为。
+**已实现的工具**：`novel_setting_upsert`、`novel_character_upsert`、`novel_relation_upsert`（里程碑 3）、`novel_event_upsert`（里程碑 5）。章节类的写工具在里程碑 7 补 —— 但规格是全局的：**新增任何 upsert 类工具都要走 `diffFields` + `upsertText`**，否则「改了却没报」就成了一种静默行为。
+
+**非 upsert 类的写工具不需要 diff**：`novel_event_refine`（"已细化 E-001：当前描述 45 → 78 字"）、`novel_event_set_status`（"已把 E-001 的状态改为 done"）、`novel_event_link_chapter`（"已把第 12 章挂到 E-003"）—— 这些工具**本身就是一次变化**，返回文本说清「发生了什么」就够，列 before → after 反而是同义重复。

@@ -211,12 +211,14 @@ ctx.ui.setStatus("novelmaster", renderStatus(layer, novel, chapter));
 
 ### 5.4 `/event` — 事件推演层
 
-- 进入时注入事件清单 + 大纲阶段划分。
-- 推演事件：AI 按阶段生成候选事件（标题 + 一句话），用户挑选 / 修改 / 自己指定（`origin: user_specified`）。
-- **推演后必须用户确认，不自动写入。**
-- 事件细化：由图章回填驱动（见 `pipeline.md「回填：结章闸门」`），本层也可手动细化。
-- 伏笔：用户说「这里埋一个线」→ 建 `origin: foreshadow` 事件，填 `plantedIn` 和 `payoffExpectedAt`。
-- **一个事件可以铺很多章**。
+- 进入时装载**大纲的阶段划分 + 主要冲突**（从大纲正文提取，抽不到时退化为整份大纲）+ **事件清单**（含 `stage` / `status` / `origin` / 涉及章数 / 伏笔的 `plantedIn` 与 `payoffExpectedAt`）：一份给 AI 注入、一份给用户显示（同 §5.1）。
+- 推演事件：AI 按阶段生成候选（标题 + 一句话），**列在对话里等用户挑选**；用户挑定后再用 `novel_event_upsert` 逐个落盘（`origin: ai_proposed`）。用户自己提的用 `user_specified`。
+- **推演结果必须用户确认才能写入，不自动落盘。** 这是本层最硬的一条：候选是讨论材料，不是数据。
+- 事件细化：由图章回填驱动（见 `pipeline.md「回填：结章闸门」`），本层也可手动细化（`novel_event_refine`）。
+- 伏笔：用户说「这里埋一个线」→ 建 `origin: foreshadow` 的事件，填 `plantedIn` 与 `payoffExpectedAt`。**伏笔不是特殊结构**，它只是带这两个字段的普通事件。
+- **一个事件可以铺很多章**（`chapters` 数组 + `novel_event_link_chapter`）；一章也可以挂多个事件，但必须有主事件。
+- 改完同样回显 diff（同 §5.1）。
+- **`stage` 是自由文本，不做机械校验**（详见 `decisions.md「已否决的方案」`）：它与大纲的阶段名靠语义对齐，而不是靠 ID 引用。
 
 ### 5.5 `/write` — 写作模式
 

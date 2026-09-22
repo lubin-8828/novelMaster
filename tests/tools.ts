@@ -254,6 +254,27 @@ export default async function run(): Promise<void> {
   check("meta 工具参数不接受 title（改书名是另一回事）", !Value.Check(toolByName("novel_meta_update").parameters, { title: "新书名" }));
   check("meta 工具接受空白调用但报无变化", (await call("novel_meta_update", {})).text.includes("没有实际变化"));
 
+  /* ---------------- 事件 diff ---------------- */
+
+  section("工具层：事件 diff");
+
+  const newEvent = await call("novel_event_upsert", { title: "发现信号", stage: "第一幕", origin: "user_specified" });
+  check("新建事件说清建了什么", newEvent.text.includes("已新建事件") && newEvent.text.includes("发现信号"));
+  check("新建事件不含 diff", !newEvent.text.includes("→"));
+
+  const changedEvent = await call("novel_event_upsert", { id: "E-001", title: "发现信号", stage: "第二幕", origin: "user_specified" });
+  check("更新事件返回 diff", changedEvent.text.includes("stage") && changedEvent.text.includes("第一幕") && changedEvent.text.includes("第二幕"));
+  const sameEvent = await call("novel_event_upsert", { id: "E-001", title: "发现信号", stage: "第二幕", origin: "user_specified" });
+  check("事件无变化时明确告知", sameEvent.text.includes("没有实际变化"));
+
+  await call("novel_event_refine", { id: "E-001", chapter: 1, description: "李明发现规律信号。" });
+  const refined = await call("novel_event_refine", { id: "E-001", chapter: 2, description: "李明确认信号来自海底遗迹，并上报张局。" });
+  check("细化回显描述长度的变化", refined.text.includes("→") && refined.text.includes("字"));
+  check("细化带 details 供上游消费", typeof refined.details.previousLength === "number");
+
+  const statusEvent = await call("novel_event_set_status", { id: "E-001", status: "done" });
+  check("改状态说清改成了什么", statusEvent.text.includes("done"));
+
   /* ---------------- 连续失败熔断 ---------------- */
 
   section("工具层：连续失败熔断");

@@ -17,6 +17,8 @@ import { listCharacters } from "../data/characters.ts";
 import { listRelations } from "../data/relations.ts";
 import { listEvents } from "../data/events.ts";
 import { readOutlineBody } from "../data/outline.ts";
+import { readSection } from "../data/md.ts";
+import { chapterNo } from "../data/ids.ts";
 import type { OpenNovel } from "../data/novel.ts";
 import type { Layer } from "./layers.ts";
 
@@ -35,6 +37,7 @@ export function loadLayerData(layer: Layer, novel: OpenNovel | null): LayerData 
   if (layer === "setting") return settingData(novel);
   if (layer === "person") return personData(novel);
   if (layer === "outline") return outlineData(novel);
+  if (layer === "event") return eventData(novel);
   return null;
 }
 
@@ -128,4 +131,59 @@ function outlineData(novel: OpenNovel): LayerData {
   }
 
   return { title: "大纲层数据", lines };
+}
+
+/**
+ * 事件层装载「阶段划分 + 主要冲突」而不是整份大纲。
+ *
+ * 与 `/outline` 的内容有重叠，但重点相反：大纲层审的是大纲（事件清单是校验材料），
+ * 事件层干的是事件（大纲只用来定位「这个事件放哪一幕」）。所以「结局」之类的区段
+ * 在这里没有必要出现。
+ *
+ * **区段抽不到时退化为整份大纲** —— 大纲的区段标题是用户可改的，抽不到不代表
+ * 内容不存在。退一步比什么都不给好。
+ */
+function eventData(novel: OpenNovel): LayerData {
+  const lines: string[] = [];
+  const body = readOutlineBody(novel.root);
+
+  if (body === null) {
+    lines.push("【大纲】", "", "（大纲文件缺失。）");
+  } else {
+    const stages = readSection(body, "阶段划分");
+    const conflicts = readSection(body, "主要冲突");
+    if (stages === null || conflicts === null) {
+      lines.push("【大纲】", "", body);
+    } else {
+      lines.push("【阶段划分】", "", ...trimBlank(stages), "", "【主要冲突】", "", ...trimBlank(conflicts));
+    }
+  }
+
+  const events = [...listEvents(novel.root)].sort((a, b) => a.order - b.order);
+  lines.push("", `【事件清单（${events.length} 条）】`, "");
+
+  if (events.length === 0) {
+    lines.push("（还没有事件。按上面的阶段逐个推演候选，交用户挑选后再落盘。）");
+  } else {
+    for (const event of events) {
+      const tags: string[] = [event.status, event.origin];
+      if (event.origin === "foreshadow") {
+        tags.push(`埋于 CH-${chapterNo(event.plantedIn ?? 0)}`);
+        if (event.payoffExpectedAt !== null) tags.push(`预计 CH-${chapterNo(event.payoffExpectedAt)} 回收`);
+      }
+      const chapters =
+        event.chapters.length === 0 ? "" : `，涉及 ${event.chapters.map((no) => `CH-${chapterNo(no)}`).join("/")}`;
+      lines.push(`- ${event.id} [${event.stage}] ${event.title}（${tags.join("，")}${chapters}）`);
+    }
+  }
+
+  return { title: "事件层数据", lines };
+}
+
+/** 去掉区段内容首尾的空行，避免把占位空行也注入进去。 */
+function trimBlank(lines: readonly string[]): string[] {
+  const result = [...lines];
+  while (result.length > 0 && (result[0] ?? "").trim() === "") result.shift();
+  while (result.length > 0 && (result[result.length - 1] ?? "").trim() === "") result.pop();
+  return result;
 }

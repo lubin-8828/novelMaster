@@ -11,7 +11,7 @@ import { STRICT } from "../data/schema.ts";
 import { linkEventChapter, refineEvent, setEventStatus, upsertEvent } from "../data/events.ts";
 import { listCharacters } from "../data/characters.ts";
 import { listSettings } from "../data/settings.ts";
-import { withNovel } from "./helper.ts";
+import { upsertText, withNovel } from "./helper.ts";
 
 const NullableChapter = Type.Union([Type.Integer({ minimum: 1 }), Type.Null()]);
 
@@ -73,11 +73,16 @@ export const eventTools = [
             settings: listSettings(novel.root).map((entry) => entry.id),
           },
         );
-        const verb = result.created ? "已新建事件" : "已更新事件";
         return {
-          text: `${verb} ${result.id}（${params.title}）。`,
+          text: upsertText({
+            label: "事件",
+            id: result.id,
+            name: params.title,
+            created: result.created,
+            changes: result.changes,
+          }),
           target: `events/${result.id}.md`,
-          details: { id: result.id, created: result.created },
+          details: { id: result.id, created: result.created, changes: result.changes },
         };
       });
     },
@@ -99,10 +104,13 @@ export const eventTools = [
     ),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       return withNovel(ctx, "novel_event_refine", (novel) => {
-        refineEvent(novel.root, params.id, params.chapter, params.description);
+        const result = refineEvent(novel.root, params.id, params.chapter, params.description);
         return {
-          text: `已细化 ${params.id}：当前描述已更新，旧描述保留在细化历史里。`,
+          text:
+            `已细化 ${params.id}：当前描述 ${result.previousLength} → ${result.newLength} 字，` +
+            `旧描述保留在细化历史里。`,
           target: `events/${params.id}.md`,
+          details: { previousLength: result.previousLength, newLength: result.newLength },
         };
       });
     },

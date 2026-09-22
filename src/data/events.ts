@@ -11,7 +11,8 @@
 
 import { readText, writeTextAtomic } from "./io.ts";
 import { NAMES, chapterIndexPath, eventDocPath, eventIndexPath } from "./paths.ts";
-import { applySectionOps, chapterLine, composeDoc, readSectionLines } from "./md.ts";
+import { applySectionOps, chapterLine, composeDoc, readSection, readSectionLines } from "./md.ts";
+import { diffFields, type FieldChange } from "./diff.ts";
 import { readDocOrNull, writeDoc } from "./doc.ts";
 import { chapterNo, nextId, requireId } from "./ids.ts";
 import { DataError } from "./errors.ts";
@@ -45,6 +46,8 @@ export interface UpsertEventInput {
 export interface UpsertEventResult {
   id: string;
   created: boolean;
+  /** 更新时的字段变化；新建时为空数组。 */
+  changes: FieldChange[];
 }
 
 export function listEvents(root: string): StoryEvent[] {
@@ -114,7 +117,52 @@ export function upsertEvent(
   const events = previous === undefined ? [...index.events, event] : index.events.map((x) => (x.id === id ? event : x));
   writeDoc(indexPath, EventIndexSchema, { ...index, events }, NAMES.eventsIndex);
 
-  return { id, created };
+  // chapters 不进 diff：它由 novel_event_link_chapter 维护，不归 upsert 管。
+  const changes = diffFields(
+    previous === undefined
+      ? undefined
+      : {
+          title: previous.title,
+          stage: previous.stage,
+          status: previous.status,
+          order: previous.order,
+          origin: previous.origin,
+          dependsOn: previous.dependsOn,
+          leadsTo: previous.leadsTo,
+          characters: previous.characters,
+          settings: previous.settings,
+          plantedIn: previous.plantedIn,
+          payoffExpectedAt: previous.payoffExpectedAt,
+        },
+    {
+      title: event.title,
+      stage: event.stage,
+      status: event.status,
+      order: event.order,
+      origin: event.origin,
+      dependsOn: event.dependsOn,
+      leadsTo: event.leadsTo,
+      characters: event.characters,
+      settings: event.settings,
+      plantedIn: event.plantedIn,
+      payoffExpectedAt: event.payoffExpectedAt,
+    },
+    [
+      "title",
+      "stage",
+      "status",
+      "order",
+      "origin",
+      "dependsOn",
+      "leadsTo",
+      "characters",
+      "settings",
+      "plantedIn",
+      "payoffExpectedAt",
+    ],
+  );
+
+  return { id, created, changes };
 }
 
 /**
@@ -123,13 +171,26 @@ export function upsertEvent(
  * 旧描述不会被丢掉 —— 它已经在细化历史里；把最新最细的版本放到「当前描述」
  * 是为了让审查项 D3 拿正文比的就是最新版本。
  */
-export function refineEvent(root: string, id: string, chapter: number, description: string): void {
+export interface RefineEventResult {
+  /** 旧「当前描述」的长度，用于回显「这次细化了多少」。 */
+  previousLength: number;
+  newLength: number;
+}
+
+/**
+ * 事件细化：更新「当前描述」（覆盖）并追加「细化历史」（追加）。
+ *
+ * 旧描述不会被丢掉 —— 它已经在细化历史里；把最新最细的版本放到「当前描述」
+ * 是为了让审查项 D3 拿正文比的就是最新版本。
+ */
+export function refineEvent(root: string, id: string, chapter: number, description: string): RefineEventResult {
   const path = eventDocPath(root, id);
   requireId("event", id, listEvents(root).map((entry) => entry.id));
   const current = readText(path);
   if (current === null) {
     throw new DataError(`事件详述文件不存在：${path}（索引里有 ${id} 但没有对应文件，数据已不一致）`);
   }
+  const previousLength = (readSection(current, "当前描述") ?? []).join("").trim().length;
   const next = applySectionOps(
     current,
     [
@@ -139,6 +200,7 @@ export function refineEvent(root: string, id: string, chapter: number, descripti
     path,
   );
   writeTextAtomic(path, next);
+  return { previousLength, newLength: description.trim().length };
 }
 
 export function setEventStatus(root: string, id: string, status: EventStatus): void {

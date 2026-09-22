@@ -16,6 +16,7 @@ import { openNovelAt } from "../src/data/novel.ts";
 import { upsertSetting } from "../src/data/settings.ts";
 import { upsertCharacter } from "../src/data/characters.ts";
 import { upsertRelation } from "../src/data/relations.ts";
+import { upsertEvent } from "../src/data/events.ts";
 import { writeOutline } from "../src/data/outline.ts";
 import { writeConfig } from "../src/data/paths.ts";
 
@@ -42,8 +43,16 @@ export default async function run(): Promise<void> {
 
   check("未打开小说时不装载", loadLayerData("setting", null) === null);
   check("主菜单层不装载", loadLayerData("menu", novel) === null);
-  check("事件层暂不装载（里程碑 5）", loadLayerData("event", novel) === null);
   check("写作层暂不装载（里程碑 6）", loadLayerData("write", novel) === null);
+
+  const emptyEvent = loadLayerData("event", novel);
+  check("事件层已装载（里程碑 5）", emptyEvent !== null);
+  const emptyEventText = renderLayerData(emptyEvent!);
+  check("事件层含【阶段划分】", emptyEventText.includes("【阶段划分】"));
+  check("事件层含【主要冲突】", emptyEventText.includes("【主要冲突】"));
+  check("事件层**不**含【结局】（与大纲层重点不同）", !emptyEventText.includes("【结局】"));
+  check("事件层含【主线大纲】以外的清单区段", emptyEventText.includes("【事件清单（0 条）】"));
+  check("没有事件时指向推演流程", emptyEventText.includes("交用户挑选后再落盘"));
 
   const emptyOutline = loadLayerData("outline", novel);
   check("大纲层已装载（里程碑 4）", emptyOutline !== null);
@@ -107,6 +116,10 @@ export default async function run(): Promise<void> {
       "",
       "第一幕：发现。",
       "",
+      "## 主要冲突",
+      "",
+      "李明想公开，研究所想封锁。",
+      "",
       "## 修订记录",
       "",
       "- [2026-01-01 00:00] 这段不该进上下文。",
@@ -119,6 +132,33 @@ export default async function run(): Promise<void> {
   check("大纲层注入阶段划分", outlineLoaded.includes("第一幕：发现"));
   check("大纲层注入时丢掉修订记录", !outlineLoaded.includes("这段不该进上下文"));
   check("大纲层含事件清单区段", outlineLoaded.includes("【事件清单"));
+
+  upsertEvent(novelRoot, { title: "发现信号", stage: "第一幕", origin: "user_specified" }, { characters: [], settings: [] });
+  upsertEvent(
+    novelRoot,
+    { title: "神秘来电", stage: "第二幕", origin: "foreshadow", plantedIn: 1, payoffExpectedAt: 9 },
+    { characters: [], settings: [] },
+  );
+
+  const eventLoaded = renderLayerData(loadLayerData("event", novel)!);
+  check("事件层注入阶段划分的内容", eventLoaded.includes("第一幕：发现"));
+  check("事件层注入主要冲突的内容", eventLoaded.includes("李明想公开，研究所想封锁"));
+  check("事件层注入事件 ID 与阶段", eventLoaded.includes("E-001") && eventLoaded.includes("[第一幕]"));
+  check("事件层注入状态与来源", eventLoaded.includes("planned") && eventLoaded.includes("user_specified"));
+  check(
+    "伏笔在清单里标出埋设与预计回收章",
+    eventLoaded.includes("foreshadow") && eventLoaded.includes("埋于 CH-001") && eventLoaded.includes("预计 CH-009 回收"),
+  );
+  check("非伏笔事件不标埋设章", !eventLoaded.includes("埋于 CH-000"));
+
+  // 大纲区段结构被改过 → 退化为整份大纲，而不是什么都不给。
+  const brokenRoot = join(ROOT, "区段损坏书");
+  initNovel(brokenRoot, { title: "区段损坏书", genre: [], premise: "p" });
+  writeOutline(brokenRoot, "# 自由格式大纲\n\n第一幕发现自己是谁。第三幕发现代价。\n");
+  const brokenNovel = openNovelAt(brokenRoot);
+  const brokenLoaded = renderLayerData(loadLayerData("event", brokenNovel!)!);
+  check("区段抽不到时退化为整份大纲", brokenLoaded.includes("【大纲】") && brokenLoaded.includes("第三幕发现代价"));
+  check("退化时不误报「大纲缺失」", !brokenLoaded.includes("（大纲文件缺失。）"));
 
   /* ---------------- 注入 ---------------- */
 
@@ -170,6 +210,11 @@ export default async function run(): Promise<void> {
   check("大纲层数据段含大纲正文", outlineSections["novelmaster-layer-data"]?.includes("海底的信号是一种语言") === true);
   check("大纲层数据段不含设定条目（每层只装载该层数据）", outlineSections["novelmaster-layer-data"]?.includes("S-001") !== true);
   check("大纲层仍注入层面段", "novelmaster-layer" in outlineSections);
+
+  const eventSections = await injectFor("event");
+  check("事件层注入数据段", "novelmaster-layer-data" in eventSections);
+  check("事件层数据段含事件清单", eventSections["novelmaster-layer-data"]?.includes("E-001") === true);
+  check("事件层数据段不含设定条目", eventSections["novelmaster-layer-data"]?.includes("S-001") !== true);
 
   /* ---------------- 进层面时的用户清单 ---------------- */
 
