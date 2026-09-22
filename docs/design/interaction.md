@@ -226,7 +226,7 @@ ctx.ui.setStatus("novelmaster", renderStatus(layer, novel, chapter));
 
 ## 6. 多 agent 脑暴协议
 
-**硬约束：脑暴必须由用户先给出方向才启动。** 理由是「否则容易偏离用户思路」。实现上，脑暴命令要求一个 `angle` 参数（用户的想法），没有它不启动。
+**硬约束：脑暴必须由用户先给出方向才启动。** 理由是「否则容易偏离用户思路」。实现上，讨论工具把 `angle`（用户给的方向）设为必填，没有它不启动。
 
 ```
 用户：/brainstorm 如果李明其实是内鬼，故事会怎么走？
@@ -248,6 +248,15 @@ ctx.ui.setStatus("novelmaster", renderStatus(layer, novel, chapter));
 
 **父层综合，不投票。** 投票式的少数服从多数会掩盖真实分歧，而分歧恰恰是用户最需要看到的东西。这一条与审查引擎「冲突条目两条都保留」是同一个理由（见 `pipeline.md「合并与依据校验」`）。
 
+| 实现 | 位置 |
+|------|------|
+| 触发 | 主会话的工具 `novel_brainstorm`（`angle` + 2–6 个视角） |
+| 输入包、失败处置、并发与超时 | `ai.md「多 agent 讨论」` |
+| 角色子会话 | `src/ai/session.ts` + `src/ai/brainstorm/` |
+| 产出回收 | 各角色调 `submit_brainstorm`，工具把结果返回**主会话**，由主会话综合 |
+
+**为何是工具而不是命令**：触发条件是「用户在层里说的那句话」，而判断「这句话是不是在要求讨论、方向是什么」正是主会话该做的事。命令要求用户先学会 `/brainstorm 方向` 的语法；工具让「讨论一下这几条线」直接生效。
+
 每个脑暴角色都是 `createAgentSession({ sessionManager: SessionManager.inMemory(), ... })`，带不同 `systemPromptOverride`，用完 `dispose()`。
 
-角色数默认 4–5，与「最近 N 章正文」的 N 无关 —— 后者是上下文注入量，前者是视角数，两者没有关系。
+角色数默认 4，与「最近 N 章正文」的 N 无关 —— 后者是上下文注入量，前者是视角数，两者没有关系。

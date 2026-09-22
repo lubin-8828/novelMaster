@@ -431,12 +431,16 @@ primaryEvent: E-003
 | `novel_chapter_report_write` | 写审查/去 AI 味/回填报告 | `chapter`, `kind`, `markdown` |
 | `novel_state_update` | 更新状态机（受转移表约束） | `chapterStatus?`, `currentChapter?`, `currentEventId?`, `pendingReflow?` |
 | `novel_inbox_append` | 追加想法 | `text`, `tags?` |
+| `novel_brainstorm` | **主会话**：按给定方向起多 agent 讨论 | `angle`, `perspectives[]` |
+| `submit_brainstorm` | **仅讨论子会话可见**：提交角色产出 | `angle`, `points[]` |
 | `submit_findings` | **仅审查子会话可见**：提交结构化审查结果 | 见 `pipeline.md「审查引擎」` |
 | `submit_brainstorm` | **仅脑暴子会话可见**：提交角色产出 | `angle`, `points[]` |
 
 表格之外的参数细节，这些是「枚举值写死在代码里」的落点 —— 让 LLM 自造枚举值是另一种形式的结构漂移：
 
-**共 20 个 `novel_*` 工具**，全部一次性注册。两个专属于子会话的工具（`submit_findings` / `submit_brainstorm`）不在里程碑 2 范围内，分别在里程碑 8 与 11 交付。
+**共 22 个 `novel_*` 工具定义**，其中 **21 个注册给主会话**；`submit_brainstorm` 只注入讨论子会话（里程碑 4b），`submit_findings` 只注入审查子会话（里程碑 8）。
+
+**为什么子会话专属工具不能注册给主会话**：如果主会话也能调 `submit_brainstorm`，它就能自己「提交」一份假产出冒充某个角色 —— 那套「多视角」当场作废。工具的可见性就是这条约束的代码实现。
 
 `novel_meta_update` 只改 `logline` / `pov` / `tense` 这三个「整理后的元信息」。**不改 `title`**：书名对应目录名 `slug`，改名会连带旧目录、旧报告里的书名、以及对外的所有引用一起变，而这是一项独立的、需要用户明确确认的操作 —— 混在一次普通修改里做，会出现「只想改个简介结果书目录换了」。
 

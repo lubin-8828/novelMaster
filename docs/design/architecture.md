@@ -67,7 +67,7 @@ UI 形态受 pi 约束：输入框是 pi 的编辑器，命令必须以 `/` 开�
 | **层面装载**（`src/extension/layer-data.ts`） | 按层面读该层索引，渲染成给 AI 与给人共用的清单 | 不做写入，不碰详述 |
 | **流程层**（`pipeline.md`） | 章状态机、审查编排、回填闸门 | 不碰文件格式 |
 | **上下文装配器**（`src/ai/context-assembler.ts`） | 把磁盘数据装成上下文包 | 不知道谁调用它 |
-| **AI 层**（`src/ai/`） | 会话工厂、子 agent 拓扑、提示词 | 不做文件 I/O 决策 |
+| **AI 层**（`src/ai/`） | 会话工厂、子 agent 拓扑、模型解析、提示词 | 不做文件 I/O 决策 |
 | **工具层**（`src/tools/`） | LLM 的**规范**数据写入口（schema 校验 + 原子写 + ID 分配 + 操作留痕）；同时是写入护栏的执行体 | 不做业务判断 |
 | **数据层**（`src/data/`） | typebox schema、读写、路径、ID 分配、状态转移表、校验 | 不感知 AI |
 
@@ -109,14 +109,16 @@ novelMaster/
 │   │   ├── index.ts              # 注册全部 novel_* 工具
 │   │   ├── guard.ts              # 护栏：拦 write/edit 写小说根（不动 shell）
 │   │   ├── helper.ts             # withNovel / 错误文本 / 留痕封装 / 失败计数
-│   │   └── read.ts  setting.ts  character.ts  relation.ts  outline.ts  meta.ts  event.ts  chapter.ts  state.ts  inbox.ts
-│   ├── ai/
-│   │   ├── session-factory.ts    # 主会话 / 只读子会话            ← 里程碑 7
-│   │   ├── models.ts             # 按用途取模型                  ← 里程碑 7
+│   │   └── read.ts  setting.ts  character.ts  relation.ts  outline.ts  meta.ts  event.ts  chapter.ts  state.ts  inbox.ts  brainstorm.ts
+│   ├── ai/                       # AI 层：会话、模型、编排。不做文件 I/O 决策
+│   │   ├── models.ts             # 按用途取模型（draft / review / brainstorm）
+│   │   ├── session.ts            # 只读子会话工厂
+│   │   ├── brainstorm/           # 多 agent 讨论（脑暴）
+│   │   │   ├── index.ts          # 编排：并发起角色、收集产出、失败处置
+│   │   │   └── input.ts          # 角色输入包（基线 + 视角）
 │   │   ├── context-assembler.ts  # 上下文装配器                  ← 里程碑 6
 │   │   ├── review/               # 审查引擎                      ← 里程碑 8
-│   │   ├── deai/                 # 去 AI 味引擎                  ← 里程碑 9
-│   │   └── brainstorm/           # 多 agent 脑暴                 ← 里程碑 11
+│   │   └── deai/                 # 去 AI 味引擎                  ← 里程碑 9
 │   └── prompts/                  # 各角色 system prompt 模板      ← 里程碑 4
 ├── tests/
 │   ├── harness.ts                # check / section / 失败计数

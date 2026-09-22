@@ -10,10 +10,12 @@ import runSmoke from "./smoke.ts";
 import runLayers from "./layers.ts";
 import runData from "./data.ts";
 import runTools from "./tools.ts";
+import runBrainstorm from "./brainstorm.ts";
 
 await runSmoke();
 await runLayers();
 runData();
 await runTools();
+await runBrainstorm();
 
 finish();

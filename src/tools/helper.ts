@@ -66,17 +66,24 @@ export function resetFailures(): void {
   failures.clear();
 }
 
-export function withNovel(
+/**
+ * 工具的统一外壳：打开小说 → 干活 → 操作留痕。
+ *
+ * `run` 允许返回 Promise：多 agent 讨论这类工具要等子会话跑完。
+ * 参数类型写成「同步或异步」而不是两个函数，是因为调用方（`execute`）本来就是 async ——
+ * 多一个 `withNovelAsync` 只会让「该用哪个」变成每次都要想一下的问题。
+ */
+export async function withNovel(
   ctx: ExtensionContext,
   op: string,
-  run: (novel: OpenNovel) => ToolOutcome,
-): ToolResult {
+  run: (novel: OpenNovel) => ToolOutcome | Promise<ToolOutcome>,
+): Promise<ToolResult> {
   const opened = openNovelStrict(ctx.cwd);
   if (!opened.ok) return failWith(op, opened.error);
 
   let outcome: ToolOutcome;
   try {
-    outcome = run(opened.novel);
+    outcome = await run(opened.novel);
   } catch (err) {
     // DataError 的 message 已经是写给 LLM 的修正提示，原样透出。
     return failWith(op, err instanceof DataError ? err.message : `意外错误：${errorText(err)}`);
