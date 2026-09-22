@@ -61,7 +61,7 @@ export interface DiscussOptions {
   /**
    * 子会话的 cwd，**必须是主会话的 cwd，不是小说根**。
    *
-   * `novel_*` 工具靠 `openNovelStrict(ctx.cwd)` 读 `.novelmaster/config.json` 定位小说；
+   * `novel_*` 工具靠 `openNovelStrict()` 读 `.novelmaster/config.json` 定位小说；
    * 如果把它设成小说根，那些工具在子会话里全会报「没有打开小说」—— 而这正好会
    * 静默削掉「角色需要资料时自己查」这个能力（模型会以为没有工具可用）。
    * 小说根路径改为写进基线文本，让模型知道去哪读。

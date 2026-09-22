@@ -24,7 +24,7 @@ export const outlineTools = [
       STRICT,
     ),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      return withNovel(ctx, "novel_outline_write", (novel) => {
+      return withNovel("novel_outline_write", (novel) => {
         writeOutline(novel.root, params.markdown);
         return { text: "已覆盖写入主线大纲，「修订记录」原样保留。", target: NAMES.outline };
       });
@@ -37,7 +37,7 @@ export const outlineTools = [
     description: "往主线大纲的「修订记录」追加一行。修订记录是追加式的，已写入的行不会被改动。",
     parameters: Type.Object({ text: Type.String({ description: "这次的修订内容" }) }, STRICT),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      return withNovel(ctx, "novel_outline_append_revision", (novel) => {
+      return withNovel("novel_outline_append_revision", (novel) => {
         appendOutlineRevision(novel.root, params.text);
         return { text: "已往主线大纲的修订记录追加一行。", target: NAMES.outline };
       });
@@ -59,7 +59,7 @@ export const inboxTools = [
       STRICT,
     ),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      return withNovel(ctx, "novel_inbox_append", (novel) => {
+      return withNovel("novel_inbox_append", (novel) => {
         const path = inboxPath(novel.root);
         if (readText(path) === null) throw new DataError(`${NAMES.inbox} 不存在，这本小说的数据不完整`);
         appendInbox(novel.root, params.text, params.tags ?? []);

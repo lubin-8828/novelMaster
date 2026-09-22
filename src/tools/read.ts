@@ -55,7 +55,7 @@ export const readIndexTool = defineTool({
     STRICT,
   ),
   async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-    return withNovel(ctx, "novel_read_index", (novel) => ({
+    return withNovel("novel_read_index", (novel) => ({
       text: JSON.stringify(READERS[params.kind](novel.root), null, 2),
     }));
   },

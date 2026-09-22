@@ -21,7 +21,7 @@ export function registerPromptSections(pi: ExtensionAPI): void {
       event.systemPromptOptions.sections["novelmaster-layer"] = renderLayerSection(layer);
     }
 
-    const novel = openNovel(ctx.cwd);
+    const novel = openNovel();
     if (novel === null) return;
 
     event.systemPromptOptions.sections["novelmaster-project"] = renderProjectSection(

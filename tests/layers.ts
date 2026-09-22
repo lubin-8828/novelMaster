@@ -38,6 +38,9 @@ function makeCtx(cwd: string, onNewSession?: () => void): ExtensionContext {
 }
 
 export default async function run(): Promise<void> {
+  // 状态是全局的（~/.novelmaster/）—— 测试必须把它重定向到临时目录，
+  // 否则多个测试文件会互写同一个 config.json。
+  process.env["NOVELMASTER_HOME"] = join(ROOT, ".home");
   rmSync(ROOT, { recursive: true, force: true });
   mkdirSync(ROOT, { recursive: true });
 
@@ -204,7 +207,7 @@ export default async function run(): Promise<void> {
   } as unknown as ExtensionAPI;
 
   novelMasterExtension(pi);
-  writeConfig(ROOT, { novelRoot });
+  writeConfig({ novelRoot });
 
   async function injectFor(layer: Layer): Promise<Record<string, string>> {
     setLayer(layer);
@@ -365,7 +368,7 @@ export default async function run(): Promise<void> {
   section("进层面：未打开小说时");
 
   setLayer("menu");
-  writeConfig(ROOT, { novelRoot: null });
+  writeConfig({ novelRoot: null });
   messages.length = 0;
   await commands.get("setting")?.("", makeCtx(ROOT));
   check("未打开小说时进设定层不报错也不发清单", messages.every((m) => m.customType !== "novelmaster-layer-data"));

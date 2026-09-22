@@ -6,7 +6,6 @@
  * 漏记一次写入，`operations.jsonl` 就不再是完整记录，而它的全部价值在于完整。
  */
 
-import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { renderChanges, type FieldChange } from "../data/diff.ts";
 import { DataError, errorText } from "../data/errors.ts";
 import { logOperation } from "../data/log.ts";
@@ -72,13 +71,14 @@ export function resetFailures(): void {
  * `run` 允许返回 Promise：多 agent 讨论这类工具要等子会话跑完。
  * 参数类型写成「同步或异步」而不是两个函数，是因为调用方（`execute`）本来就是 async ——
  * 多一个 `withNovelAsync` 只会让「该用哪个」变成每次都要想一下的问题。
+ *
+ * **不需要 `ctx`**：小说位置是全局的（`~/.novelmaster/`），与运行目录无关。
  */
 export async function withNovel(
-  ctx: ExtensionContext,
   op: string,
   run: (novel: OpenNovel) => ToolOutcome | Promise<ToolOutcome>,
 ): Promise<ToolResult> {
-  const opened = openNovelStrict(ctx.cwd);
+  const opened = openNovelStrict();
   if (!opened.ok) return failWith(op, opened.error);
 
   let outcome: ToolOutcome;

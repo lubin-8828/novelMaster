@@ -38,7 +38,7 @@ export const brainstormTools = [
       STRICT,
     ),
     async execute(_toolCallId, params, _signal, onUpdate, ctx) {
-      return withNovel(ctx, "novel_brainstorm", async (novel) => {
+      return withNovel("novel_brainstorm", async (novel) => {
         const result = await discuss({
           novel,
           cwd: ctx.cwd,

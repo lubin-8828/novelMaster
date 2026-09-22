@@ -36,7 +36,7 @@ export const chapterTools = [
       STRICT,
     ),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      return withNovel(ctx, "novel_chapter_outline_write", (novel) => {
+      return withNovel("novel_chapter_outline_write", (novel) => {
         writeChapterOutline(novel.root, {
           chapter: params.chapter,
           title: params.title,
@@ -70,7 +70,7 @@ export const chapterTools = [
       STRICT,
     ),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      return withNovel(ctx, "novel_chapter_write", (novel) => {
+      return withNovel("novel_chapter_write", (novel) => {
         const result = writeChapterText(novel.root, {
           chapter: params.chapter,
           text: params.text,
@@ -111,7 +111,7 @@ export const chapterTools = [
       STRICT,
     ),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      return withNovel(ctx, "novel_chapter_summary_write", (novel) => {
+      return withNovel("novel_chapter_summary_write", (novel) => {
         writeChapterSummary(novel.root, params.chapter, params.sections);
         return {
           text: `已写入第 ${params.chapter} 章摘要。`,
@@ -136,7 +136,7 @@ export const chapterTools = [
       STRICT,
     ),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      return withNovel(ctx, "novel_chapter_report_write", (novel) => {
+      return withNovel("novel_chapter_report_write", (novel) => {
         writeChapterReport(novel.root, params.chapter, params.kind, params.markdown);
         return {
           text: `已写入第 ${params.chapter} 章的 ${params.kind} 报告。`,

@@ -52,7 +52,7 @@ export const characterTools = [
       STRICT,
     ),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      return withNovel(ctx, "novel_character_upsert", (novel) => {
+      return withNovel("novel_character_upsert", (novel) => {
         const result = upsertCharacter(
           novel.root,
           {
@@ -97,7 +97,7 @@ export const characterTools = [
       STRICT,
     ),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      return withNovel(ctx, "novel_character_append_timeline", (novel) => {
+      return withNovel("novel_character_append_timeline", (novel) => {
         appendCharacterTimeline(novel.root, params.id, params.chapter, params.text);
         return {
           text: `已给 ${params.id} 追加时间轴条目，lastUpdatedChapter 推进到 ${params.chapter}。`,

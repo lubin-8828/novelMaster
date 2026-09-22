@@ -36,7 +36,7 @@ export const stateTools = [
       STRICT,
     ),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      return withNovel(ctx, "novel_state_update", (novel) => {
+      return withNovel("novel_state_update", (novel) => {
         const { root, state } = novel;
 
         // 状态转移只在显式传了 chapterStatus 时校验。只改 pendingReflow

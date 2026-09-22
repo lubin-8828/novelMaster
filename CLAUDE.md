@@ -73,7 +73,7 @@ npm run typecheck    # tsc --noEmit，含 src/ 与 tests/，纯类型检查
 
 **novelMaster 是 TUI，不是后台服务** —— 它要交互终端。想常驻用 tmux（`start.sh` 在非 TTY 下会打印具体命令）。
 
-**`cwd` 决定小说存在哪**：`novels/` 与 `.novelmaster/` 都在运行目录下，所以**固定在一个目录里用它**（换个目录会看到另一套书）。
+**`cwd` 与数据位置无关**：状态在 `~/.novelmaster/`（全局）。`cwd` 只影响子会话里 `read` 工具的相对路径基准 —— 而小说根的**绝对路径**会写进子会话的基线文本，所以它们不需要靠 `cwd` 找书。
 
 ### 必须知道的五条
 

@@ -26,7 +26,7 @@ function emit(pi: ExtensionAPI, customType: string, text: string): void {
 
 function refreshStatus(ctx: ExtensionContext): void {
   const layer = getLayer();
-  const novel = openNovel(ctx.cwd);
+  const novel = openNovel();
   const chapter =
     novel && layer === "write"
       ? { no: novel.state.currentChapter, status: novel.state.chapterStatus }
@@ -43,7 +43,7 @@ export function registerCommands(pi: ExtensionAPI): void {
   pi.registerCommand(CMD.help, {
     description: "显示当前层面可用命令",
     handler: async (_args, ctx) => {
-      const novel = openNovel(ctx.cwd);
+      const novel = openNovel();
       emit(
         pi,
         "novelmaster-help",
@@ -68,7 +68,7 @@ export function registerCommands(pi: ExtensionAPI): void {
   pi.registerCommand(CMD.context, {
     description: "打印本章上下文包（每段的 token 估算 + 来源）",
     handler: async (args, ctx) => {
-      const novel = openNovel(ctx.cwd);
+      const novel = openNovel();
       if (novel === null) {
         ctx.ui.notify("还没有打开小说。先用 /init 新建一本。", "warning");
         return;
@@ -88,7 +88,7 @@ export function registerCommands(pi: ExtensionAPI): void {
   pi.registerCommand(CMD.review, {
     description: "审查（章末自动触发，也可手动补跑）",
     handler: async (_args, ctx) => {
-      const novel = openNovel(ctx.cwd);
+      const novel = openNovel();
       if (novel === null) {
         ctx.ui.notify("还没有打开小说。先用 /init 新建一本。", "warning");
         return;
@@ -110,7 +110,7 @@ export function registerCommands(pi: ExtensionAPI): void {
   pi.registerCommand(CMD.deai, {
     description: "去 AI 味（章末自动触发，也可手动补跑）",
     handler: async (_args, ctx) => {
-      const novel = openNovel(ctx.cwd);
+      const novel = openNovel();
       if (novel === null) {
         ctx.ui.notify("还没有打开小说。先用 /init 新建一本。", "warning");
         return;
@@ -149,7 +149,7 @@ export function registerCommands(pi: ExtensionAPI): void {
         );
         return;
       }
-      const novel = openNovel(ctx.cwd);
+      const novel = openNovel();
       if (novel === null) {
         ctx.ui.notify("还没有打开小说。先用 /init 新建一本。", "warning");
         return;
@@ -161,7 +161,7 @@ export function registerCommands(pi: ExtensionAPI): void {
   pi.registerCommand(CMD.done, {
     description: "验收通过：结章 + 清空上下文",
     handler: async (_args, ctx) => {
-      const novel = openNovel(ctx.cwd);
+      const novel = openNovel();
       if (novel === null) {
         ctx.ui.notify("还没有打开小说。先用 /init 新建一本。", "warning");
         return;
@@ -215,7 +215,7 @@ export function registerCommands(pi: ExtensionAPI): void {
         ctx.ui.notify("/next 是写作模式的命令。先 /write 进入。", "warning");
         return;
       }
-      const novel = openNovel(ctx.cwd);
+      const novel = openNovel();
       if (novel === null) {
         ctx.ui.notify("还没有打开小说。先用 /init 新建一本。", "warning");
         return;
@@ -233,7 +233,7 @@ export function registerCommands(pi: ExtensionAPI): void {
         }
         refreshStatus(ctx);
         ctx.ui.notify(`开始第 ${chapterNo(next)} 章。`, "info");
-        const reopened = openNovel(ctx.cwd);
+        const reopened = openNovel();
         if (reopened === null) return;
         state = reopened.state;
       }
@@ -248,7 +248,7 @@ export function registerCommands(pi: ExtensionAPI): void {
       }
 
       try {
-        const current = openNovel(ctx.cwd);
+        const current = openNovel();
         if (current === null) {
           ctx.ui.notify("小说打不开了 —— 文件可能被改坏了。", "error");
           return;
@@ -278,7 +278,7 @@ export function registerCommands(pi: ExtensionAPI): void {
 
         // 给用户的清单与注入给 AI 的是同一份（见 docs/design/ai.md「层面数据的装载」）。
         // 进层后对着空屏幕不知道该说什么，是「有哪些条目」这一句能解决的问题。
-        const novel = openNovel(ctx.cwd);
+        const novel = openNovel();
         const data = novel === null ? null : safeLayerData(layer, novel);
         if (data === null) {
           ctx.ui.notify(`进入${LAYERS[layer].label}层。用 /help 看本层命令。`, "info");
@@ -332,11 +332,11 @@ async function runInit(pi: ExtensionAPI, ctx: ExtensionCommandContext): Promise<
     return;
   }
 
-  const root = defaultNovelRoot(ctx.cwd, slugify(title));
+  const root = defaultNovelRoot(slugify(title));
 
   try {
     const result = initNovel(root, { title, genre, premise: premise.trim() });
-    writeConfig(ctx.cwd, { novelRoot: result.root });
+    writeConfig({ novelRoot: result.root });
     emit(
       pi,
       "novelmaster-init",

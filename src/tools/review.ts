@@ -22,7 +22,7 @@ export const reviewTools = [
       "**生成正文后必须立即调用它** —— 流水线不得跳步。审查员只读、不改稿；报告出来后要逐条交给用户拍板。",
     parameters: Type.Object({}, STRICT),
     async execute(_toolCallId, _params, _signal, onUpdate, ctx) {
-      return withNovel(ctx, "novel_review", async (novel) => {
+      return withNovel("novel_review", async (novel) => {
         const result = await runReviewAndPersist({
           novel,
           chapter: novel.state.currentChapter,

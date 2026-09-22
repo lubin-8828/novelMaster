@@ -41,7 +41,7 @@ export const settingTools = [
       STRICT,
     ),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      return withNovel(ctx, "novel_setting_upsert", (novel) => {
+      return withNovel("novel_setting_upsert", (novel) => {
         const result = upsertSetting(novel.root, {
           id: params.id,
           name: params.name,
@@ -82,7 +82,7 @@ export const settingTools = [
       STRICT,
     ),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      return withNovel(ctx, "novel_setting_append_revision", (novel) => {
+      return withNovel("novel_setting_append_revision", (novel) => {
         appendSettingRevision(novel.root, params.id, params.chapter, params.text);
         return {
           text: `已往 ${params.id} 的修订记录追加一行。`,

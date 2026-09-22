@@ -57,6 +57,9 @@ function logLines(): number {
 }
 
 export default async function run(): Promise<void> {
+  // 状态是全局的（~/.novelmaster/）—— 测试必须把它重定向到临时目录，
+  // 否则多个测试文件会互写同一个 config.json。
+  process.env["NOVELMASTER_HOME"] = join(ROOT, ".home");
   rmSync(ROOT, { recursive: true, force: true });
   mkdirSync(ROOT, { recursive: true });
   resetFailures();
@@ -90,7 +93,7 @@ export default async function run(): Promise<void> {
 
   section("工具层：未打开小说");
 
-  writeConfig(ROOT, { novelRoot: null });
+  writeConfig({ novelRoot: null });
   const noNovel = await call("novel_setting_upsert", { name: "x", category: "item", summary: "s", body: "b" });
   check("写工具在未打开小说时报错", noNovel.isError);
   check("错误文本提示先 /init", noNovel.text.includes("/init"));
@@ -103,7 +106,7 @@ export default async function run(): Promise<void> {
 
   const novelRoot = join(ROOT, "工具书");
   initNovel(novelRoot, { title: "工具书", genre: [], premise: "测试。" });
-  writeConfig(ROOT, { novelRoot });
+  writeConfig({ novelRoot });
   resetFailures();
 
   const before = logLines();

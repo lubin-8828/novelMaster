@@ -27,7 +27,7 @@ export const metaTools = [
       STRICT,
     ),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      return withNovel(ctx, "novel_meta_update", (novel) => {
+      return withNovel("novel_meta_update", (novel) => {
         const result = updateMeta(novel.root, {
           logline: params.logline,
           pov: params.pov,

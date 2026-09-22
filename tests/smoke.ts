@@ -150,6 +150,8 @@ check(
 
 section("数据层");
 
+// 状态是全局的（~/.novelmaster/）—— 测试必须把它重定向到临时目录。
+process.env["NOVELMASTER_HOME"] = join(ROOT, ".home");
 rmSync(ROOT, { recursive: true, force: true });
 mkdirSync(ROOT, { recursive: true });
 
@@ -222,7 +224,7 @@ sections = await runBeforeAgentStart(ROOT, "menu");
 check("主菜单层不注入层面段", !("novelmaster-layer" in sections));
 
 // 打开小说之后：层面段与项目段都注入。
-writeConfig(ROOT, { novelRoot });
+writeConfig({ novelRoot });
 sections = await runBeforeAgentStart(ROOT, "write");
 check("打开小说后注入项目段", "novelmaster-project" in sections);
 check("项目段含书名", sections["novelmaster-project"]?.includes("深海回声") ?? false);

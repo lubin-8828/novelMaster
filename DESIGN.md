@@ -89,8 +89,8 @@ novelMaster 是一个跑在终端里的 AI 辅助小说写作工具，单人单�
 | 事件 ID | `E-001` 起 | 同上；伏笔也用 `E-` 前缀 |
 | 章节号 | 三位零填充，从 `001` 起 | 文件名与引用都用这个形式 |
 | 章节伴生文件 | `NNN.txt` / `NNN.outline.md` / `NNN.summary.md` / `NNN.review.md` / `NNN.deai.md` / `NNN.reflow.md` | 同章全部文件共享 `NNN` 前缀，便于按章取用 |
-| 应用配置目录 | `.novelmaster/`（位于运行目录） | 存放 `config.json` |
-| 默认小说根目录 | `novels/<slug>/`（位于运行目录） | 每本小说一个目录 |
+| 应用状态目录 | `~/.novelmaster/`（全局；可用 `NOVELMASTER_HOME` 覆盖） | 存放 `config.json` 与全部小说 |
+| 小说根目录 | `~/.novelmaster/novels/<slug>/` | 每本小说一个自包含目录 |
 | 操作留痕 | `<小说根>/logs/operations.jsonl` | 追加式 |
 | schema 版本字段 | `schemaVersion`，当前 `1` | 每个 JSON 文档都有 |
 
@@ -151,13 +151,14 @@ novelMaster/
 ├── DESIGN.md                     # 本文件（根设计文档）
 ├── CLAUDE.md                     # 面向 Agent 的项目说明与强制规则
 ├── docs/design/                  # 设计子文档（见 §5 导航索引）
-├── bin/novelmaster.mjs           # 可执行入口
+├── bin/novelmaster.mjs           # 可执行入口（`npm link` 后得到 `novelmaster` 全局命令）
 ├── src/                          # 源码（结构见 docs/design/architecture.md）
 ├── tests/                        # 测试：all.ts 是入口（npm test），smoke.ts / data.ts / tools.ts 是三个套件
+├── start.sh / stop.sh            # 带前置检查的启动与外部停止
 ├── package.json / tsconfig.json / .gitignore
-├── novels/                       # 默认小说根目录（git 忽略）
-└── .novelmaster/config.json      # 当前打开的小说（git 忽略）
 ```
+
+**应用状态不在项目目录里。** 它放在 `~/.novelmaster/`（见 §3.1），所以在任何目录敲 `novelmaster` 都是同一本书。
 
 ### 4.2 小说数据目录
 

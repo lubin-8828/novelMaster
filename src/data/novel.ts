@@ -26,12 +26,12 @@ export function openNovelAt(root: string): OpenNovel | null {
 }
 
 /**
- * 打开「当前打开的小说」。未打开或文件损坏都返回 null，不抛错 ——
- * 状态栏、提示词注入这些地方只关心「现在有没有一本可用的书」。
- * 需要区分「没打开」与「文件坏了」的调用方用 `openNovelStrict`。
+ * 打开「当前打开的小说」。未打开或文件损坏都返回 null，不抛错。
+ *
+ * 不需要 `cwd`：状态是全局的（`~/.novelmaster/`），与运行目录无关。
  */
-export function openNovel(cwd: string): OpenNovel | null {
-  const root = readConfig(cwd).novelRoot;
+export function openNovel(): OpenNovel | null {
+  const root = readConfig().novelRoot;
   return root === null ? null : openNovelAt(root);
 }
 
@@ -54,8 +54,8 @@ export type OpenStrictResult = OpenSuccess | OpenFailure;
  * 与 `openNovelAt` 的分工：这里服务工具层，**必须说清为什么失败** ——
  * 「没打开小说」和「小说文件坏了」对 LLM 是两个完全不同的行动指令。
  */
-export function openNovelStrict(cwd: string): OpenStrictResult {
-  const config = readConfig(cwd);
+export function openNovelStrict(): OpenStrictResult {
+  const config = readConfig();
   if (config.novelRoot === null) {
     return { ok: false, error: "当前没有打开小说。请用户先执行 /init 新建一本，或从已有小说继续。" };
   }

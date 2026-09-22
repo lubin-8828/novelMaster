@@ -51,7 +51,7 @@ export const eventTools = [
       STRICT,
     ),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      return withNovel(ctx, "novel_event_upsert", (novel) => {
+      return withNovel("novel_event_upsert", (novel) => {
         const result = upsertEvent(
           novel.root,
           {
@@ -103,7 +103,7 @@ export const eventTools = [
       STRICT,
     ),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      return withNovel(ctx, "novel_event_refine", (novel) => {
+      return withNovel("novel_event_refine", (novel) => {
         const result = refineEvent(novel.root, params.id, params.chapter, params.description);
         return {
           text:
@@ -133,7 +133,7 @@ export const eventTools = [
       STRICT,
     ),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      return withNovel(ctx, "novel_event_set_status", (novel) => {
+      return withNovel("novel_event_set_status", (novel) => {
         setEventStatus(novel.root, params.id, params.status);
         return {
           text: `已把 ${params.id} 的状态改为 ${params.status}。`,
@@ -159,7 +159,7 @@ export const eventTools = [
       STRICT,
     ),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      return withNovel(ctx, "novel_event_link_chapter", (novel) => {
+      return withNovel("novel_event_link_chapter", (novel) => {
         linkEventChapter(novel.root, params.eventId, params.chapter, params.primary);
         return {
           text: `已把第 ${params.chapter} 章挂到 ${params.eventId}${params.primary ? "，并设为主事件" : ""}。`,

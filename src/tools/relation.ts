@@ -31,7 +31,7 @@ export const relationTools = [
       STRICT,
     ),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      return withNovel(ctx, "novel_relation_upsert", (novel) => {
+      return withNovel("novel_relation_upsert", (novel) => {
         const result = upsertRelation(
           novel.root,
           {
@@ -81,7 +81,7 @@ export const relationTools = [
       STRICT,
     ),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      return withNovel(ctx, "novel_relation_append_history", (novel) => {
+      return withNovel("novel_relation_append_history", (novel) => {
         appendRelationHistory(novel.root, params.id, params.chapter, params.change, params.nextStatus);
         return {
           text: `已给 ${params.id} 追加变更记录${params.nextStatus === undefined ? "" : `，状态改为 ${params.nextStatus}`}。`,

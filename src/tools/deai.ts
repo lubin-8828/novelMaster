@@ -22,7 +22,7 @@ export const deaiTools = [
       "**审查之后必须调用它**（流水线不得跳步）。只动表达层，不改事实 —— 报告里有一节机械校验这件事。",
     parameters: Type.Object({}, STRICT),
     async execute(_toolCallId, _params, _signal, onUpdate, ctx) {
-      return withNovel(ctx, "novel_deai", async (novel) => {
+      return withNovel("novel_deai", async (novel) => {
         const result = await runDeaiWithRecheck({
           novel,
           chapter: novel.state.currentChapter,

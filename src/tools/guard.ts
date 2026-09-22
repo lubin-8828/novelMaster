@@ -33,7 +33,7 @@ export function registerGuard(pi: ExtensionAPI): void {
 
     if (!WRITE_TOOLS.has(event.toolName)) return undefined;
 
-    const root = readConfig(ctx.cwd).novelRoot;
+    const root = readConfig().novelRoot;
     if (root === null) return undefined;
 
     const path = (event.input as { path?: unknown }).path;
