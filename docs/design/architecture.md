@@ -42,13 +42,14 @@ UI 形态受 pi 约束：输入框是 pi 的编辑器，命令必须以 `/` 开�
 
 | 项 | 值 |
 |------|-----|
-| 启动命令 | `novelmaster`（跑一次 `npm link` 后全局可用，与 `pi` 同一形式） |
+| 启动命令 | `novelmaster`（跑一次 `npm link` 后全局可用，与 `pi` 同一形式；Windows 上 npm 会生成 `novelmaster.cmd` shim，同样可用） |
 | 入口链 | `novelmaster` → `bin/novelmaster.mjs`（3 行 shim）→ `src/cli.ts` → `InteractiveMode` |
-| 应用状态 | `~/.novelmaster/`（**全局**，与运行目录无关；`NOVELMASTER_HOME` 可覆盖） |
+| 应用状态 | `~/.novelmaster/`（**全局**，与运行目录无关；`NOVELMASTER_HOME` 可覆盖；Windows 上即 `C:\Users\<用户>\.novelmaster\`） |
 | 退出 | TUI 里 `Ctrl+C`，或在对话里 `/quit` |
 | 前置要求 | Node >= 22.19；**一个交互终端**（它要 TTY） |
+| 平台 | Linux / macOS / Windows / Termux 均已验证（Windows 兼容化见 `ops.md「里程碑与实施进度」`） |
 
-**它不是一个服务。** novelMaster 是 TUI：用户要看着界面输入。所以没有「后台 daemon」这种形态 —— 后台启动的结果是「进程活着，但你既看不到界面也没法输入」。想常驻（手机息屏后还在）用 tmux。`start.sh` 遇到非 TTY 会直接拒绝并打出 tmux 命令，而不是起一个不响应的进程让人发呆。
+**它不是一个服务。** novelMaster 是 TUI：用户要看着界面输入。所以没有「后台 daemon」这种形态 —— 后台启动的结果是「进程活着，但你既看不到界面也没法输入」。想常驻（手机息屏后还在）用 tmux。`scripts/start.mjs` 遇到非 TTY 会直接拒绝并打出 tmux 命令，而不是起一个不响应的进程让人发呆。
 
 **状态为什么全局。** 早期版本放在运行目录（`<cwd>/novels/`），后果是「换个目录敲 `novelmaster` 就看到另一套书」—— 而那个惊吓是真实的（用户会以为书丢了）。已改为 `~/.novelmaster/`：**任何目录都是同一本**。见 `data.md「应用状态目录」`。
 
@@ -97,6 +98,13 @@ UI 形态受 pi 约束：输入框是 pi 的编辑器，命令必须以 `/` 开�
 ```
 novelMaster/
 ├── bin/novelmaster.mjs           # 可执行入口（转发到 src/cli.ts，无构建步骤）
+├── scripts/
+│   ├── start.mjs                 # 跨平台启动：前置检查 + pidfile + 同进程跑 cli.ts
+│   ├── stop.mjs                  # 跨平台停止：Linux 优雅退出，Windows 强杀
+│   ├── install.mjs               # 安装逻辑：查 Node 版本 → npm install → npm link
+│   └── uninstall.mjs             # 卸载逻辑：npm rm -g novelmaster
+├── install.bat / uninstall.bat   # Windows 安装 / 卸载（纯 ASCII 一行壳，规避 bat 编码坑）
+├── install.sh / uninstall.sh     # Linux 安装 / 卸载（一行转发到 scripts/*.mjs）
 ├── src/
 │   ├── cli.ts                    # 组装 runtime + InteractiveMode
 │   ├── extension/
@@ -215,8 +223,10 @@ npm install          # 148 个包，无原生模块构建步骤
 |------|------|
 | `novelmaster` | 启动 TUI（**全局命令**，先跑一次 `npm link` 装它）。与 `pi` 同一形式 |
 | `npm start` | 同上，等价 `node src/cli.ts`（不装全局命令时用） |
-| `./start.sh` | 同上，但带前置检查（Node 版本 / 依赖 / **是否在交互终端里**）并写 pidfile |
-| `./stop.sh` | 从**另一个终端**停止。正常退出在 TUI 里 Ctrl+C 或 `/quit` 就行 |
+| `node scripts/start.mjs` | 带前置检查（Node 版本 / 依赖 / **是否在交互终端里**）并写 pidfile。**跨平台**：Node 实现，Linux / macOS / Windows / Termux 通用 |
+| `node scripts/stop.mjs` | 从**另一个终端**停止。正常退出在 TUI 里 Ctrl+C 或 `/quit` 就行 |
+| `npm run stop` | 等价 `node scripts/stop.mjs` |
+| `npm run start-checked` | 等价 `node scripts/start.mjs` |
 | `npm test` | 全部测试（等价 `node tests/all.ts`），不启动 TUI |
 | `npm run typecheck` | `tsc --noEmit`，纯类型检查 |
 
@@ -226,23 +236,35 @@ npm install          # 148 个包，无原生模块构建步骤
 cd <项目目录> && npm link      # 在 $PREFIX/bin 里建一个指向 bin/novelmaster.mjs 的符号链接
 ```
 
+一步到位的安装用平台脚本：Windows `install.bat`（双击或命令行），Linux `./install.sh`。内容都是「检查 Node 版本 → npm install → npm link」；卸载用 `uninstall.bat` / `./uninstall.sh`（`npm rm -g novelmaster`）。**卸载不删小说数据** —— 数据在 `~/.novelmaster/`，与软件安装位置无关。
+
 `bin/` 入口只有 3 行（`import "../src/cli.ts"`）—— 没有构建步骤，所以它不需要 `dist/`，也不需要打包。
 
-**`novelmaster` 与 `start.sh` 的分工**：前者是日常启动（直接进 TUI），后者多了前置检查与 pidfile（所以 `stop.sh` 能停它）。两个都在，不要重复实现：`start.sh` 不重写启动逻辑，它只是「检查完把终端交给你」。
+**`novelmaster` 与 `scripts/start.mjs` 的分工**：前者是日常启动（直接进 TUI），后者多了前置检查与 pidfile（所以 `scripts/stop.mjs` 能停它）。两个都在，不要重复实现：`start.mjs` 不重写启动逻辑，它只是「检查完把终端交给你」。
+
+**启动脚本为什么用 Node 写而不是 shell**：bash 脚本在 Windows 上不可用，而「bash 一份 + PowerShell 一份」是两个副本 —— 前置检查、pidfile、停止逻辑两处漂移的代价比省下的启动开销大得多（与 `decisions.md「踩坑记录」`里命令表拆两张是同一类教训）。Node 是运行时本来就有的依赖，`scripts/start.mjs` 一份实现跨平台。
+
+**安装 / 卸载脚本（`install.*` / `uninstall.*`）是纯 ASCII 平台壳，逻辑在 `scripts/*.mjs`**：`install.bat` / `install.sh` 都是一行 `node scripts/install.mjs`，`uninstall.bat` / `uninstall.sh` 同理。逻辑（查 Node 版本 → npm install → npm link / npm rm -g novelmaster）与全部提示文本在 Node 脚本里。
+
+**为什么 bat 壳必须纯 ASCII**：bat 文件若存成 UTF-8（无 BOM），中文 Windows 的 cmd 按 GBK 代码页逐字节解析，中文行会被切成错乱的命令、执行流失控（实测：提示行全变成「xx 不是内部或外部命令」，甚至意外拉起 TUI 进程）。而「GBK 编码的 bat」在英文系统上又是另一种乱码。只有纯 ASCII 壳在任何代码页下都正确解析 —— 与启动 / 停止一样，逻辑只有 `scripts/*.mjs` 一份，不复制（见 `decisions.md「踩坑记录」`）。
 
 **一个必须知道的事实：状态是全局的。** `~/.novelmaster/`（配置与全部小说）与你在哪里启动无关 —— 任何目录敲 `novelmaster` 都是同一本书。可用 `NOVELMASTER_HOME` 环境变量覆盖（测试就用它隔离）。见 `data.md「目录树」`。
 
 **早期版本曾把状态放运行目录**（`<cwd>/novels/`），后果是「换个目录书就没了」的惊吓。已改。
 
-**为什么 `start.sh` 不做成后台 daemon。** novelMaster 是 **TUI，不是服务** —— 它要一个交互终端（用户得看着界面输入）。后台启动的结果是「进程活着，但你既看不到界面也没法输入」，所以脚本遇到非 TTY 会**直接拒绝并给出 tmux 方案**，而不是起一个不响应的进程让人发呆。想常驻（手机息屏后还在）就用 tmux：
+**为什么 `start.mjs` 不做成后台 daemon。** novelMaster 是 **TUI，不是服务** —— 它要一个交互终端（用户得看着界面输入）。后台启动的结果是「进程活着，但你既看不到界面也没法输入」，所以脚本遇到非 TTY 会**直接拒绝并给出常驻方案**，而不是起一个不响应的进程让人发呆。Linux 上想常驻（手机息屏后还在）就用 tmux：
 
 ```bash
 pkg install tmux
-tmux new -s novelmaster './start.sh'   # 起来后 Ctrl+B 然后 D 脱离
+tmux new -s novelmaster 'node scripts/start.mjs'   # 起来后 Ctrl+B 然后 D 脱离
 tmux attach -t novelmaster             # 下次接回去
 ```
 
-**`start.sh` 里的 `exec` 不是风格问题。** 它让 node 顶替 shell 而 **exec 保留 pid** —— pidfile 里存的才是 node 的 pid，`stop.sh` kill 它才真的杀到进程。第一版没写 `exec`，结果 `stop.sh` 只杀掉了外壳、node 变成孤儿继续跑（这个缺陷是实测出来的，不是推的）。也不用 `node ... &` + `wait`：后台进程不在前台进程组里，读终端会被 SIGTTIN 停掉，TUI 直接卡死。
+Windows 上没有 tmux 这一层需求（桌面终端窗口可以最小化），非 TTY 拒绝时提示「请在终端里运行，不要双击脚本」。
+
+**`start.mjs` 同进程直接 `import ../src/cli.ts`，不是 spawn 子进程。** 旧 bash 版用 `exec` 让 node 顶替 shell、pidfile 里存 node 的 pid；Node 实现更直接 —— 脚本自己就是 node 进程，`process.pid` 就是 novelMaster 的 pid，不需要「exec 保留 pid」那套绕法。也不用 `node ... &` + `wait`：后台进程不在前台进程组里，读终端会被 SIGTTIN 停掉（Linux），TUI 直接卡死。
+
+**停止脚本的平台差异是刻意保留的**：Linux 上 `process.kill(pid, "SIGTERM")` 给 5 秒优雅退出（正在跑的子会话能收尾），超时再 `SIGKILL`；Windows 上 Node 无法发 SIGTERM（`process.kill(pid)` 等价 TerminateProcess 强杀），`stop.mjs` 会提示「Windows 下请优先在 TUI 里 Ctrl+C 或 /quit」。强杀是安全的：所有写入都是「临时文件 + rename」的原子写（见 `data.md「写入约定」`）。
 
 ### 7.3 调试方法
 
@@ -253,7 +275,7 @@ tmux attach -t novelmaster             # 下次接回去
 | 验证数据层改动 | 在 `tests/data.ts` 加断言，而不是手工点 TUI —— 手工点不可复现 |
 | 验证工具与护栏 | 在 `tests/tools.ts` 加断言：直接调工具的 `execute()`，再用捕获到的 `tool_call` 处理器验护栏，全程不经模型、零成本 |
 | 验证提示词注入 | 冒烟测试直接调用捕获到的 `before_agent_start` 处理器，断言 `systemPromptOptions.sections` 的内容（无需调用模型，零成本） |
-| 非 TTY 环境试启动 | `timeout 15 node src/cli.ts < /dev/null` —— pi 能在无 TTY 下渲染，可用来确认启动链路没断 |
+| 非 TTY 环境试启动 | `timeout 15 node src/cli.ts < /dev/null`（Linux）—— pi 能在无 TTY 下渲染，可用来确认启动链路没断。Windows 上 `start.mjs` 的非 TTY 拒绝逻辑与 pidfile 清理可用 `node scripts/start.mjs < /dev/null` 验证 |
 | 看会话落盘 | `~/.pi/agent/sessions/` 下按 cwd 分目录的 `.jsonl` |
 
 ### 7.4 注意事项

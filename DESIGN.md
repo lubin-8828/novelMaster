@@ -152,9 +152,11 @@ novelMaster/
 ├── CLAUDE.md                     # 面向 Agent 的项目说明与强制规则
 ├── docs/design/                  # 设计子文档（见 §5 导航索引）
 ├── bin/novelmaster.mjs           # 可执行入口（`npm link` 后得到 `novelmaster` 全局命令）
+├── scripts/                      # 跨平台启动/停止（Node 实现，Windows 与 Linux 通用）
 ├── src/                          # 源码（结构见 docs/design/architecture.md）
 ├── tests/                        # 测试：all.ts 是入口（npm test），smoke.ts / data.ts / tools.ts 是三个套件
-├── start.sh / stop.sh            # 带前置检查的启动与外部停止
+├── install.sh / uninstall.sh     # Linux 安装 / 卸载（一行转发到 scripts/install.mjs / uninstall.mjs）
+├── install.bat / uninstall.bat   # Windows 安装 / 卸载（纯 ASCII 一行壳，同上）
 ├── package.json / tsconfig.json / .gitignore
 ```
 

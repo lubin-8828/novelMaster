@@ -63,15 +63,21 @@ novelMaster 是一个跑在终端里的 AI 辅助小说写作工具，单人单�
 
 ```bash
 npm install          # 装依赖（无原生构建步骤）
-npm link             # 装全局命令（只需一次）—— 之后任意目录敲 novelmaster
+install.bat          # Windows：安装（查 Node 版本 → npm install → npm link），一步到位
+./install.sh         # Linux：同上
+npm link             # 只装全局命令（已装依赖时）—— 之后任意目录敲 novelmaster
 novelmaster          # 启动 TUI
-./start.sh           # 同上，带前置检查（Node 版本 / 依赖 / 交互终端）+ pidfile
-./stop.sh            # 从另一个终端停止（正常在 TUI 里 Ctrl+C 或 /quit）
-npm test             # 全部测试（771 项断言），不启动 TUI
+node scripts/start.mjs   # 同上，带前置检查（Node 版本 / 依赖 / 交互终端）+ pidfile
+node scripts/stop.mjs    # 从另一个终端停止（正常在 TUI 里 Ctrl+C 或 /quit）
+npm test             # 全部测试（773 项断言），不启动 TUI
 npm run typecheck    # tsc --noEmit，含 src/ 与 tests/，纯类型检查
 ```
 
-**novelMaster 是 TUI，不是后台服务** —— 它要交互终端。想常驻用 tmux（`start.sh` 在非 TTY 下会打印具体命令）。
+**安装 / 卸载**：Windows 跑 `install.bat` / `uninstall.bat`（双击或命令行），Linux 跑 `./install.sh` / `./uninstall.sh`。四个脚本都是壳，逻辑在 `scripts/install.mjs` / `scripts/uninstall.mjs`（查 Node 版本 → npm install → npm link / npm rm -g novelmaster）。**小说数据在 `~/.novelmaster/`（Windows：`%USERPROFILE%\.novelmaster\`），卸载不删数据**，想连数据一起清要手动删该目录。
+
+**启动 / 停止**的跨平台入口是 `node scripts/start.mjs` / `node scripts/stop.mjs`（或 `npm run start-checked` / `npm run stop`）。跨平台说明见 `docs/design/architecture.md「开发与调试」`。
+
+**novelMaster 是 TUI，不是后台服务** —— 它要交互终端。想常驻用 tmux（`scripts/start.mjs` 在非 TTY 下会打印具体命令）。
 
 **`cwd` 与数据位置无关**：状态在 `~/.novelmaster/`（全局）。`cwd` 只影响子会话里 `read` 工具的相对路径基准 —— 而小说根的**绝对路径**会写进子会话的基线文本，所以它们不需要靠 `cwd` 找书。
 
@@ -91,13 +97,13 @@ npm run typecheck    # tsc --noEmit，含 src/ 与 tests/，纯类型检查
 
 ### 当前进度
 
-**11 个里程碑全部交付。** 主链路完整可用：
+**11 个里程碑全部交付，另完成 Windows 兼容化。** 主链路完整可用：
 
 ```
 /init → /outline → /event → /write → /next → 生成正文 → 审查 → 去 AI 味
   → 用户验收 → 回填 → /done → 清空上下文 → 下一章
 ```
 
-23 个 `novel_*` 工具注册给主会话（另有 3 个子会话专用）、写入护栏生效、上下文装配器可检查、771 项断言全过。
+23 个 `novel_*` 工具注册给主会话（另有 3 个子会话专用）、写入护栏生效、上下文装配器可检查、773 项断言全过（Linux 与 Windows 均验证）。
 下一步是真实写一章的端到端验收（`docs/design/ops.md「手工」`的 61–91 项）。
 详见 `docs/design/ops.md「里程碑与实施进度」`。

@@ -5,8 +5,8 @@
  * **编排的失败处置与状态推进**都是纯逻辑。真实改写的手工验收见 `ops.md §2.2`。
  */
 
-import { mkdirSync, rmSync } from "node:fs";
-import { join } from "node:path";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { check, section } from "./harness.ts";
 import { initNovel } from "../src/data/init.ts";
 import { openNovelAt } from "../src/data/novel.ts";
@@ -22,7 +22,7 @@ import { collectProperNouns, scanDeaiScope, scopeWarningCount } from "../src/ai/
 import { renderDeaiReport } from "../src/ai/deai/report.ts";
 import { createSubmitDeaiTool, runDeaiAndPersist, runDeaiWithRecheck } from "../src/ai/deai/index.ts";
 import type { ReviewerRunner } from "../src/ai/review/index.ts";
-import { readHumanizerSkill, HUMANIZER_SKILL_PATH } from "../src/ai/deai/skill.ts";
+import { readHumanizerSkill } from "../src/ai/deai/skill.ts";
 import { TOOL_NAMES } from "../src/tools/index.ts";
 
 const ROOT = join(process.cwd(), ".tmp-deai");
@@ -35,11 +35,25 @@ export default async function run(): Promise<void> {
 
   section("humanizer skill 注入");
 
-  const skill = readHumanizerSkill();
-  check("能读到 humanizer skill", skill !== null, HUMANIZER_SKILL_PATH);
+  // 测试**自包含**：用临时假 skill 文件，不依赖用户全局目录里恰好装了 humanizer
+  // skill（见 docs/design/decisions.md「踩坑记录」4.9）。真实 skill 的存在性由
+  // 运行时校验（编排里读不到即抛错，见下方断言）。
+  const fakeSkillPath = join(ROOT, "fake-skill", "SKILL.md");
+  mkdirSync(dirname(fakeSkillPath), { recursive: true });
+  writeFileSync(
+    fakeSkillPath,
+    "---\nname: humanizer\ndescription: 假 skill，仅供测试\n---\n\n# Humanizer\n\n§1 not-X-but-Y 模式。\nThe sample overrides the patterns.",
+    "utf8",
+  );
+  const skill = readHumanizerSkill(fakeSkillPath);
+  check("能读到 skill（路径可注入）", skill !== null, fakeSkillPath);
   check("skill 去掉了 YAML frontmatter", !(skill ?? "").startsWith("---"));
   check("skill 正文含模式编号", (skill ?? "").includes("§1"));
   check("skill 含「样本优先于通用规则」这条接口", (skill ?? "").includes("The sample overrides the patterns"));
+  check("读不到时返回 null（不抛错）", readHumanizerSkill(join(ROOT, "不存在", "SKILL.md")) === null);
+
+  /** 编排测试用的假 skill 文本（与真实文件同构：模式编号 + 样本接口句）。 */
+  const FAKE_SKILL = "§1 not-X-but-Y 模式。\nThe sample overrides the patterns.";
 
   /* ---------------- 机械范围检查 ---------------- */
 
@@ -169,18 +183,28 @@ export default async function run(): Promise<void> {
   const withDeai = openNovelAt(root);
   check("前置状态为 auto_reviewed", withDeai?.state.chapterStatus === "auto_reviewed");
   if (withDeai !== null) {
-    const outcome = await runDeaiAndPersist({ novel: withDeai, chapter: 1, cwd: ROOT, runner: okRunner });
+    const outcome = await runDeaiAndPersist({ novel: withDeai, chapter: 1, cwd: ROOT, runner: okRunner, skillText: FAKE_SKILL });
     check("报告已生成", outcome.reportMarkdown.includes("第 001 章 去 AI 味报告"));
     check("**改后正文已落盘**", (readText(chapterTextPath(root, 1)) ?? "").includes("他端起杯子"));
     check("状态推进到 deai_done", openNovelAt(root)?.state.chapterStatus === "deai_done");
     check("章节索引状态同步", listChapters(root).find((c) => c.no === 1)?.status === "deai_done");
   }
 
+  // 读不到 skill 时编排**抛错**（不静默跳过）—— 真实机器上没装 humanizer skill
+  // 时用户会看到明确提示，而不是「去 AI 味悄悄没做」。
+  let skillThrew = false;
+  try {
+    await runDeaiAndPersist({ novel: openNovelAt(root)!, chapter: 1, cwd: ROOT, runner: okRunner, skillText: null });
+  } catch {
+    skillThrew = true;
+  }
+  check("**读不到 skill 时抛错（不静默跳过）**", skillThrew);
+
   const failRunner = async () => ({ hits: [], rewritten: "", error: "模型没有调用 submit_deai" });
   const beforeText = readText(chapterTextPath(root, 1)) ?? "";
   let threw = false;
   try {
-    await runDeaiAndPersist({ novel: openNovelAt(root)!, chapter: 1, cwd: ROOT, runner: failRunner });
+    await runDeaiAndPersist({ novel: openNovelAt(root)!, chapter: 1, cwd: ROOT, runner: failRunner, skillText: FAKE_SKILL });
   } catch {
     threw = true;
   }
@@ -203,6 +227,7 @@ export default async function run(): Promise<void> {
     runner: okRunner,
     reviewRunner: fakeReview,
     onProgress: (message) => progress.push(message),
+    skillText: FAKE_SKILL,
   });
   check("两步都跑了", both.deai.hits.length === 1 && both.recheck.text.includes("改稿复查"));
   check("进度上报了改写与复查两个阶段", progress.length === 2 && progress[0]?.includes("改写") === true);

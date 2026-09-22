@@ -15,10 +15,15 @@ import { join } from "node:path";
 
 export const HUMANIZER_SKILL_PATH = join(homedir(), ".pi", "agent", "skills", "humanizer", "SKILL.md");
 
-/** 读 skill 正文。读不到返回 null —— 调用方应当**报错而不是静默跳过**。 */
-export function readHumanizerSkill(): string | null {
+/**
+ * 读 skill 正文。读不到返回 null —— 调用方应当**报错而不是静默跳过**。
+ *
+ * `path` 可注入：测试用临时假 skill 文件，不依赖用户全局目录里恰好装了这个
+ * skill（见 docs/design/decisions.md「踩坑记录」4.9）。
+ */
+export function readHumanizerSkill(path: string = HUMANIZER_SKILL_PATH): string | null {
   try {
-    return stripFrontmatter(readFileSync(HUMANIZER_SKILL_PATH, "utf8"));
+    return stripFrontmatter(readFileSync(path, "utf8"));
   } catch {
     return null;
   }

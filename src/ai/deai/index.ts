@@ -56,6 +56,11 @@ export interface DeaiOptions {
   reviewRunner?: ReviewerRunner | undefined;
   /** 阶段进度（改写 → 复查），用于让用户知道没卡死。 */
   onProgress?: ((message: string) => void) | undefined;
+  /**
+   * 覆盖 humanizer skill 文本（测试用）：undefined = 读用户全局目录里的真实
+   * skill；null = 模拟「读不到」；字符串 = 注入假 skill。
+   */
+  skillText?: string | null | undefined;
 }
 
 /** 去 AI 味 + 改稿复查。**两步是一个环节**，拆开会让「忘了复查」变成可能。 */
@@ -83,7 +88,7 @@ export async function runDeaiWithRecheck(options: DeaiOptions): Promise<{
 export async function runDeaiAndPersist(options: DeaiOptions): Promise<DeaiResult> {
   const { novel, chapter } = options;
 
-  const skill = readHumanizerSkill();
+  const skill = options.skillText !== undefined ? options.skillText : readHumanizerSkill();
   if (skill === null) {
     // **不静默跳过**：读不到 skill 就意味着「去 AI 味」不会按既定标准发生。
     throw new DataError(

@@ -12,6 +12,8 @@
   },
   "scripts": {
     "start": "node src/cli.ts",
+    "start-checked": "node scripts/start.mjs",
+    "stop": "node scripts/stop.mjs",
     "test": "node tests/all.ts",
     "typecheck": "tsc --noEmit"
   },

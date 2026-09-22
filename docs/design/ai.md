@@ -287,6 +287,8 @@ const submitFindings = defineTool({
 
 显式注入让「做没做」变成代码事实，而不是模型的心情。
 
+**测试不依赖真实 skill 文件**：`readHumanizerSkill(path)` 接受可注入路径，`DeaiOptions.skillText` 接受注入文本 —— 测试用临时假 skill 文本（含 frontmatter、模式编号、「样本优先于通用规则」接口句）验证代码逻辑，任何机器上都能跑，不需要用户全局目录里恰好装了这个 skill（见 `decisions.md「踩坑记录」`）。真实 skill 的存在性由运行时校验（读不到即报错，不静默跳过）。
+
 skill 内容里有一条关键接口：**用户给文风样本时，样本优先于通用模式规则**（包括它的破折号禁令）。这正是需要的钩子 —— 样本 = 本书已写章节，见 `pipeline.md「去 AI 味引擎」`。
 
 ---

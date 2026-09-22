@@ -99,7 +99,9 @@ export function exists(path: string): boolean {
 }
 
 function fsyncFile(path: string): void {
-  const fd = openSync(path, "r");
+  // Windows 上对只读句柄 fsync 会报 EPERM（需要写访问权），必须用读写句柄。
+  // 这些 tmp 文件都是本函数刚写出来的，一定有写权限。
+  const fd = openSync(path, "r+");
   try {
     fsyncSync(fd);
   } finally {
