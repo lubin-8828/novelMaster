@@ -1,6 +1,6 @@
 import type { ExtensionAPI, ExtensionContext, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { CMD, ENTRY_LAYERS, LAYERS, ALL_COMMANDS, COMMANDS, getLayer, setLayer, type CmdName, type Layer } from "./layers.ts";
-import { renderContext, renderHelp, renderBrainstormTask, renderNextTask, renderStatus, CHAPTER_STATUS_LABEL } from "./render.ts";
+import { renderContext, renderHelp, renderBrainstormTask, renderInitTask, renderNextTask, renderStatus, CHAPTER_STATUS_LABEL } from "./render.ts";
 import { renderLayerData, safeLayerData } from "./layer-data.ts";
 import { assemble } from "../ai/context-assembler.ts";
 import { runReviewAndPersist } from "../ai/review/index.ts";
@@ -11,8 +11,6 @@ import { chapterSummaryPath } from "../data/paths.ts";
 import { exists } from "../data/io.ts";
 import { errorText } from "../data/errors.ts";
 import { openNovel } from "../data/novel.ts";
-import { defaultNovelRoot, writeConfig } from "../data/paths.ts";
-import { initNovel, slugify } from "../data/init.ts";
 
 /**
  * 把 /help 之类的长文本作为消息放进对话记录。
@@ -261,7 +259,7 @@ export function registerCommands(pi: ExtensionAPI): void {
   });
 
   pi.registerCommand(CMD.init, {
-    description: "新建一本小说（书名 / 类型 / 核心想法）",
+    description: "新建一本小说（AI 引导式访谈：书名 / 类型 / 核心想法）",
     handler: async (_args, ctx) => {
       await runInit(pi, ctx);
     },
@@ -313,45 +311,8 @@ export function registerCommands(pi: ExtensionAPI): void {
   });
 }
 
-async function runInit(pi: ExtensionAPI, ctx: ExtensionCommandContext): Promise<void> {
-  const title = (await ctx.ui.input("书名"))?.trim();
-  if (!title) {
-    ctx.ui.notify("已取消：没有书名。", "info");
-    return;
-  }
-
-  const genreRaw = (await ctx.ui.input("类型（逗号分隔，可留空）", "例如：科幻, 悬疑")) ?? "";
-  const genre = genreRaw
-    .split(/[,，、]/)
-    .map((s) => s.trim())
-    .filter(Boolean);
-
-  const premise = (await ctx.ui.editor("核心想法（你最初想到这个故事时脑子里装的东西，不用整理）")) ?? "";
-  if (!premise.trim()) {
-    ctx.ui.notify("已取消：核心想法为空。没有它，后面所有推断都没有根。", "warning");
-    return;
-  }
-
-  const root = defaultNovelRoot(slugify(title));
-
-  try {
-    const result = initNovel(root, { title, genre, premise: premise.trim() });
-    writeConfig({ novelRoot: result.root });
-    emit(
-      pi,
-      "novelmaster-init",
-      [
-        `已创建小说《${result.meta.title}》`,
-        `根目录：${result.root}`,
-        `类型：${result.meta.genre.length > 0 ? result.meta.genre.join(" / ") : "（未填）"}`,
-        "",
-        "已建立的文件：",
-        ...result.files.map((f) => `  ${f}`),
-        "",
-        "下一步：/outline 进入大纲层搭主线，或 /help 看全部命令。",
-      ].join("\n"),
-    );
-  } catch (error) {
-    ctx.ui.notify(`建书失败：${(error as Error).message}`, "error");
-  }
+async function runInit(pi: ExtensionAPI, _ctx: ExtensionCommandContext): Promise<void> {
+  // 不弹表单：把建书交给对话。发引导任务段，AI 逐轮提问、整理、等用户确认后
+  // 调 novel_init 落盘（见 docs/design/interaction.md「建书」）。
+  emit(pi, "novelmaster-task", renderInitTask());
 }

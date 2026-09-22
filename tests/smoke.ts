@@ -150,7 +150,8 @@ check(
 
 section("数据层");
 
-// 状态是全局的（~/.novelmaster/）—— 测试必须把它重定向到临时目录。
+// 数据在启动目录下（<cwd>/.novelmaster/）—— 测试必须把它重定向到临时目录，
+// 否则多个测试文件会互写同一个 config.json。
 process.env["NOVELMASTER_HOME"] = join(ROOT, ".home");
 rmSync(ROOT, { recursive: true, force: true });
 mkdirSync(ROOT, { recursive: true });

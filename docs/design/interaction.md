@@ -21,7 +21,7 @@ pi 已有内建命令。**我们的命令名必须避开它们**，否则会出�
 
 | 命令 | 层面 | 行为 | 状态 |
 |------|------|------|------|
-| `/init` | menu | 新建一本小说（书名 / 类型 / 核心想法） | ✅ 已实现 |
+| `/init` | menu | 新建一本小说（AI 引导式访谈：书名 / 类型 / 核心想法） | ✅ 已实现 |
 | `/setting` | → setting | 进入设定层 | ✅ 已实现 |
 | `/person` | → person | 进入人物与关系层 | ✅ 已实现 |
 | `/outline` | → outline | 进入大纲层 | ✅ 已实现 |
@@ -117,21 +117,31 @@ ctx.ui.setStatus("novelmaster", renderStatus(layer, novel, chapter));
 
 ### 4.2 建书（`/init`）
 
+`/init` 不弹表单，而是**把建书交给对话**：命令发一个任务段，AI 进入引导模式，像编辑一样逐轮提问，把用户的模糊念头整理成可落盘的元信息。
+
 ```
 /init
-  ├─ ctx.ui.input("书名")           ← 空则取消；不建无名之书
-  ├─ ctx.ui.input("类型")           ← 逗号/顿号分隔，可留空
-  ├─ ctx.ui.editor("核心想法")      ← 空则取消（没有它，后面一切推断都没有根）
-  ├─ root = <cwd>/novels/slugify(书名)
-  ├─ initNovel(root, { title, genre, premise })
-  │    ├─ 若已存在 meta.json → 抛错拒绝（不覆盖已有小说）
-  │    ├─ mkdir setting/ characters/ events/ chapters/ logs/
-  │    └─ 写 10 个初始文件（meta/state/relations/4 个 index/inbox/outline/operations）
-  ├─ writeConfig(cwd, { novelRoot: root })
-  └─ 回报书名、根目录、已建文件清单，并提示下一步
+  ├─ 命令发送任务段（novelmaster-task）：建书引导规则
+  │    ├─ 逐轮提问，不一次甩全部问题：书名 → 类型 → 核心想法
+  │    ├─ 追问补全：什么时代背景、谁的故事、最想写的一个画面……
+  │    ├─ premise 用用户原话，不改写（它是一切推断的根）
+  │    └─ 收集齐后**回显「书名 / 类型 / 核心想法」等用户确认**，
+  │        用户点头前不得调 novel_init（转述式确认，同资料层）
+  │
+  ├─ AI 在对话里提问 ←→ 用户回答（可多轮）
+  │
+  └─ 用户确认 → AI 调 novel_init(title, genre[], premise)
+       ├─ 书名 / premise 为空 → 拒绝（无名之书不建；没有 premise，后面一切推断无根）
+       ├─ 同书名已存在 → 拒绝（不覆盖已有小说）
+       ├─ root = <启动目录>/.novelmaster/novels/<slug>
+       ├─ initNovel：mkdir 6 个目录 + 写 10 个初始文件
+       ├─ writeConfig({ novelRoot: root })
+       └─ AI 转述：书名、根目录、已建文件清单，提示下一步 /outline
 ```
 
 `/init` 只负责「建目录 + 记下最初的想法」。把想法整理成大纲是 `/outline` 的事 —— 两者分开，用户才有机会在建完书之后先改主意。
+
+**为什么用 AI 引导而不是弹窗表单**：表单只能收集已知答案，引导能挖出用户说不清的东西 —— 用户往往只有一个模糊念头（「想看一个深海故事」），需要追问（谁在看？发现了什么？你希望读者感受到什么？）才能凑出可用的 premise。这个改进来自用户实测反馈（见 `decisions.md「与用户原始要求的偏差清单」`）。
 
 ### 4.3 从零到第一章（完整链路）
 

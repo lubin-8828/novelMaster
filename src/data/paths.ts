@@ -1,11 +1,10 @@
 import { join, resolve } from "node:path";
 import { readFileSync } from "node:fs";
 import process from "node:process";
-import { homedir } from "node:os";
 import { writeJsonAtomic } from "./io.ts";
 import { chapterNo } from "./ids.ts";
 
-/** 应用状态目录名（位于用户主目录下）。 */
+/** 应用状态目录名（位于启动目录下）。 */
 export const APP_DIR = ".novelmaster";
 /** 应用级配置文件名。 */
 export const CONFIG_FILE = "config.json";
@@ -119,25 +118,30 @@ export function chapterReportPath(root: string, no: number, kind: string): strin
 
 const EMPTY_CONFIG: AppConfig = { novelRoot: null };
 
+// 模块加载时捕获启动 cwd：即使后续有 chdir 也不漂移（子会话与主会话同进程，
+// 用同一个数据根）。
+const START_CWD = process.cwd();
+
 /**
- * 应用状态目录：`~/.novelmaster/`。
+ * 应用状态目录：`<启动目录>/.novelmaster/`。
  *
- * **全局，与运行目录无关** —— 任何目录敲 `novelmaster` 都是同一本书。
- * 早期版本把它放在运行目录下，结果是「换个目录书就没了」的惊吓（见 `decisions.md`）。
+ * **数据跟着启动目录走** —— 从哪个目录敲 `novelmaster`，数据就在哪个目录。
+ * 曾一度全局化（`~/.novelmaster/`），用户实测后要求改回（见 `decisions.md
+ * 「与用户原始要求的偏差清单」）。
  *
- * `NOVELMASTER_HOME` 可覆盖它：状态全局化后测试会互写同一个 config.json，
- * 而这个开关把「数据放哪」从不可控变成可注入。
+ * `NOVELMASTER_HOME` 可覆盖它：测试会互写同一个 config.json，而这个开关
+ * 把「数据放哪」从不可控变成可注入。
  */
 export function appDir(): string {
   const override = process.env[HOME_ENV];
-  return override !== undefined && override !== "" ? resolve(override) : join(homedir(), APP_DIR);
+  return override !== undefined && override !== "" ? resolve(override) : join(START_CWD, APP_DIR);
 }
 
 export function configPath(): string {
   return join(appDir(), CONFIG_FILE);
 }
 
-/** 新建小说时的默认根目录：`~/.novelmaster/novels/<slug>/`。 */
+/** 新建小说时的默认根目录：`<启动目录>/.novelmaster/novels/<slug>/`。 */
 export function defaultNovelRoot(slug: string): string {
   return join(appDir(), DEFAULT_NOVELS_DIR, slug);
 }

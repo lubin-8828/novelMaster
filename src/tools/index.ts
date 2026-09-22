@@ -8,6 +8,7 @@
  */
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { initTools } from "./init.ts";
 import { readTools } from "./read.ts";
 import { metaTools } from "./meta.ts";
 import { settingTools } from "./setting.ts";
@@ -22,6 +23,7 @@ import { reviewTools } from "./review.ts";
 import { deaiTools } from "./deai.ts";
 
 export const ALL_TOOLS = [
+  ...initTools,
   ...readTools,
   ...metaTools,
   ...settingTools,

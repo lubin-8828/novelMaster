@@ -69,7 +69,7 @@ type Purpose = "draft" | "review" | "brainstorm" | "utility";
 | **基础段** | 项目规则、数据布局说明、可用工具、「不许编造依据」 | 常驻（`DefaultResourceLoader.systemPromptOverride`） |
 | **项目段** | 当前小说的书名、根目录、数据布局、硬规则 | `before_agent_start`，仅在已打开小说时 |
 | **层面段** | 当前层面的操作规则（例：大纲层只谈结构与冲突，不写正文） | `before_agent_start`，按当前层面 |
-| **任务段** | 本回合任务（推演本章大纲 / 生成正文 / 回填） | 每次命令注入 |
+| **任务段** | 本回合任务（建书引导 / 推演本章大纲 / 生成正文 / 回填） | 每次命令注入 |
 | **子 agent 段** | 角色人格（审查员、脑暴角色） | 子会话创建时 |
 
 项目段与层面段用 `event.systemPromptOptions.sections` 注入，**不整体替换 `systemPrompt`**：pi 会把变化的 section 作为补丁追加，保留其余部分的前缀缓存。整体替换会让每次切层都丢缓存。

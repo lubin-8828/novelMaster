@@ -13,8 +13,8 @@ import { check, section, throws } from "./harness.ts";
 import { novelMasterExtension } from "../src/extension/index.ts";
 import { ALL_TOOLS, TOOL_NAMES } from "../src/tools/index.ts";
 import { resetFailures } from "../src/tools/helper.ts";
-import { initNovel } from "../src/data/init.ts";
-import { operationsPath, settingIndexPath, statePath, writeConfig } from "../src/data/paths.ts";
+import { initNovel, isNovelRoot } from "../src/data/init.ts";
+import { operationsPath, readConfig, settingIndexPath, statePath, writeConfig } from "../src/data/paths.ts";
 import { readText } from "../src/data/io.ts";
 import { openNovelAt } from "../src/data/novel.ts";
 
@@ -57,7 +57,7 @@ function logLines(): number {
 }
 
 export default async function run(): Promise<void> {
-  // 状态是全局的（~/.novelmaster/）—— 测试必须把它重定向到临时目录，
+  // 数据在启动目录下（<cwd>/.novelmaster/）—— 测试必须把它重定向到临时目录，
   // 否则多个测试文件会互写同一个 config.json。
   process.env["NOVELMASTER_HOME"] = join(ROOT, ".home");
   rmSync(ROOT, { recursive: true, force: true });
@@ -84,7 +84,7 @@ export default async function run(): Promise<void> {
 
   novelMasterExtension(pi);
 
-  check("注册了 23 个 novel_* 工具", TOOL_NAMES.length === 23, `实际 ${TOOL_NAMES.length}：${TOOL_NAMES.join(", ")}`);
+  check("注册了 24 个 novel_* 工具", TOOL_NAMES.length === 24, `实际 ${TOOL_NAMES.length}：${TOOL_NAMES.join(", ")}`);
   check("工具名无重复", new Set(TOOL_NAMES).size === TOOL_NAMES.length);
   check("工具名都以 novel_ 开头", TOOL_NAMES.every((name) => name.startsWith("novel_")));
   check("注册了 tool_call 护栏钩子", handlers.has("tool_call"));
@@ -99,6 +99,30 @@ export default async function run(): Promise<void> {
   check("错误文本提示先 /init", noNovel.text.includes("/init"));
   const noNovelRead = await call("novel_read_index", { kind: "setting" });
   check("读索引在未打开小说时同样报错（不返回空结果）", noNovelRead.isError);
+
+  /* ---------------- 建书工具（novel_init） ---------------- */
+
+  section("工具层：建书（novel_init）");
+
+  // novel_init 是唯一**不需要先打开小说**的写工具：它恰恰负责建书。
+  writeConfig({ novelRoot: null });
+  const createdNovel = await call("novel_init", { title: "新书", genre: ["科幻"], premise: "深海里有东西。" });
+  check("建书成功", !createdNovel.isError && createdNovel.text.includes("新书"));
+  const createdRoot = readConfig().novelRoot;
+  check("config 指向新书", createdRoot !== null && createdRoot.includes("新书"));
+  check("目录已建（是一本合法小说）", createdRoot !== null && isNovelRoot(createdRoot));
+  check(
+    "建书留痕一行",
+    createdRoot !== null &&
+      (readText(operationsPath(createdRoot)) ?? "").split("\n").filter((l) => l.trim() !== "").length === 1,
+  );
+
+  const noTitle = await call("novel_init", { title: "  ", genre: [], premise: "有想法。" });
+  check("空书名拒绝（不建无名之书）", noTitle.isError && noTitle.text.includes("书名"));
+  const noPremise = await call("novel_init", { title: "第二本", genre: [], premise: "   " });
+  check("空核心想法拒绝（它是一切推断的根）", noPremise.isError && noPremise.text.includes("核心想法"));
+  const dup = await call("novel_init", { title: "新书", genre: [], premise: "换个想法。" });
+  check("同书名重复建书拒绝（不覆盖已有小说）", dup.isError && dup.text.includes("已经是一本小说"));
 
   /* ---------------- 正常写入与留痕 ---------------- */
 

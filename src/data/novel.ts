@@ -28,7 +28,7 @@ export function openNovelAt(root: string): OpenNovel | null {
 /**
  * 打开「当前打开的小说」。未打开或文件损坏都返回 null，不抛错。
  *
- * 不需要 `cwd`：状态是全局的（`~/.novelmaster/`），与运行目录无关。
+ * 不需要 `cwd` 参数：小说位置由 `NOVELMASTER_HOME` / 启动目录统一决定（`paths.ts`），与调用方无关。
  */
 export function openNovel(): OpenNovel | null {
   const root = readConfig().novelRoot;

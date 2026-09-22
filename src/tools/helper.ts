@@ -72,7 +72,7 @@ export function resetFailures(): void {
  * 参数类型写成「同步或异步」而不是两个函数，是因为调用方（`execute`）本来就是 async ——
  * 多一个 `withNovelAsync` 只会让「该用哪个」变成每次都要想一下的问题。
  *
- * **不需要 `ctx`**：小说位置是全局的（`~/.novelmaster/`），与运行目录无关。
+ * **不需要 `ctx`**：小说位置由 `NOVELMASTER_HOME` / 启动目录统一决定（`paths.ts`），与运行目录无关。
  */
 export async function withNovel(
   op: string,

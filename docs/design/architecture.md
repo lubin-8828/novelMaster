@@ -44,16 +44,16 @@ UI 形态受 pi 约束：输入框是 pi 的编辑器，命令必须以 `/` 开�
 |------|-----|
 | 启动命令 | `novelmaster`（跑一次 `npm link` 后全局可用，与 `pi` 同一形式；Windows 上 npm 会生成 `novelmaster.cmd` shim，同样可用） |
 | 入口链 | `novelmaster` → `bin/novelmaster.mjs`（3 行 shim）→ `src/cli.ts` → `InteractiveMode` |
-| 应用状态 | `~/.novelmaster/`（**全局**，与运行目录无关；`NOVELMASTER_HOME` 可覆盖；Windows 上即 `C:\Users\<用户>\.novelmaster\`） |
+| 应用状态 | `<启动目录>/.novelmaster/`（**数据跟着启动目录走**；`NOVELMASTER_HOME` 可覆盖） |
 | 退出 | TUI 里 `Ctrl+C`，或在对话里 `/quit` |
 | 前置要求 | Node >= 22.19；**一个交互终端**（它要 TTY） |
 | 平台 | Linux / macOS / Windows / Termux 均已验证（Windows 兼容化见 `ops.md「里程碑与实施进度」`） |
 
 **它不是一个服务。** novelMaster 是 TUI：用户要看着界面输入。所以没有「后台 daemon」这种形态 —— 后台启动的结果是「进程活着，但你既看不到界面也没法输入」。想常驻（手机息屏后还在）用 tmux。`scripts/start.mjs` 遇到非 TTY 会直接拒绝并打出 tmux 命令，而不是起一个不响应的进程让人发呆。
 
-**状态为什么全局。** 早期版本放在运行目录（`<cwd>/novels/`），后果是「换个目录敲 `novelmaster` 就看到另一套书」—— 而那个惊吓是真实的（用户会以为书丢了）。已改为 `~/.novelmaster/`：**任何目录都是同一本**。见 `data.md「应用状态目录」`。
+**状态为什么在启动目录。** 曾一度改为全局（`~/.novelmaster/`），理由是「换个目录敲 `novelmaster` 就看到另一套书」的惊吓。用户实测后明确要求改回：**数据跟着启动目录走**，备份 / 搬移 / 管理都直观，「换目录换书」是期望语义而不是事故。见 `data.md「应用状态目录」` 与 `decisions.md「与用户原始要求的偏差清单」`。
 
-**`cwd` 现在只影响两件事**：子会话里 `read` 工具的相对路径基准，以及 pi 的资源发现（后者本项目用 `systemPromptOverride` + `appendSystemPromptOverride: () => []` 关掉了）。**它不影响小说位置** —— 小说根的绝对路径会写进子会话的基线文本（`ai.md「多 agent 讨论」`），所以子会话不需要靠 `cwd` 找书。
+**`cwd` 现在影响两件事**：数据位置（`<启动目录>/.novelmaster/`）与子会话里 `read` 工具的相对路径基准（pi 的资源发现用 `systemPromptOverride` + `appendSystemPromptOverride: () => []` 关掉了）。小说根的绝对路径会写进子会话的基线文本（`ai.md「多 agent 讨论」`），所以子会话不需要靠 `cwd` 找书。
 
 ## 2. 与 pi 的集成点（已核对 API，v0.86.1）
 
@@ -236,7 +236,7 @@ npm install          # 148 个包，无原生模块构建步骤
 cd <项目目录> && npm link      # 在 $PREFIX/bin 里建一个指向 bin/novelmaster.mjs 的符号链接
 ```
 
-一步到位的安装用平台脚本：Windows `install.bat`（双击或命令行），Linux `./install.sh`。内容都是「检查 Node 版本 → npm install → npm link」；卸载用 `uninstall.bat` / `./uninstall.sh`（`npm rm -g novelmaster`）。**卸载不删小说数据** —— 数据在 `~/.novelmaster/`，与软件安装位置无关。
+一步到位的安装用平台脚本：Windows `install.bat`（双击或命令行），Linux `./install.sh`。内容都是「检查 Node 版本 → npm install → npm link」；卸载用 `uninstall.bat` / `./uninstall.sh`（`npm rm -g novelmaster`）。**卸载不删小说数据** —— 数据在 `<启动目录>/.novelmaster/`，与软件安装位置无关。
 
 `bin/` 入口只有 3 行（`import "../src/cli.ts"`）—— 没有构建步骤，所以它不需要 `dist/`，也不需要打包。
 
@@ -248,9 +248,9 @@ cd <项目目录> && npm link      # 在 $PREFIX/bin 里建一个指向 bin/nove
 
 **为什么 bat 壳必须纯 ASCII**：bat 文件若存成 UTF-8（无 BOM），中文 Windows 的 cmd 按 GBK 代码页逐字节解析，中文行会被切成错乱的命令、执行流失控（实测：提示行全变成「xx 不是内部或外部命令」，甚至意外拉起 TUI 进程）。而「GBK 编码的 bat」在英文系统上又是另一种乱码。只有纯 ASCII 壳在任何代码页下都正确解析 —— 与启动 / 停止一样，逻辑只有 `scripts/*.mjs` 一份，不复制（见 `decisions.md「踩坑记录」`）。
 
-**一个必须知道的事实：状态是全局的。** `~/.novelmaster/`（配置与全部小说）与你在哪里启动无关 —— 任何目录敲 `novelmaster` 都是同一本书。可用 `NOVELMASTER_HOME` 环境变量覆盖（测试就用它隔离）。见 `data.md「目录树」`。
+**一个必须知道的事实：数据跟着启动目录走。** `<启动目录>/.novelmaster/`（配置与全部小说）—— 从哪个目录敲 `novelmaster`，数据就在哪个目录。可用 `NOVELMASTER_HOME` 环境变量覆盖（测试就用它隔离）。见 `data.md「目录树」`。
 
-**早期版本曾把状态放运行目录**（`<cwd>/novels/`），后果是「换个目录书就没了」的惊吓。已改。
+**曾改过全局又改回来。** 中途版本曾把状态放 `~/.novelmaster/`（任何目录同一本），用户实测后要求改回启动目录（见 `decisions.md「与用户原始要求的偏差清单」）。
 
 **为什么 `start.mjs` 不做成后台 daemon。** novelMaster 是 **TUI，不是服务** —— 它要一个交互终端（用户得看着界面输入）。后台启动的结果是「进程活着，但你既看不到界面也没法输入」，所以脚本遇到非 TTY 会**直接拒绝并给出常驻方案**，而不是起一个不响应的进程让人发呆。Linux 上想常驻（手机息屏后还在）就用 tmux：
 

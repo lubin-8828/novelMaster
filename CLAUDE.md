@@ -69,17 +69,17 @@ npm link             # 只装全局命令（已装依赖时）—— 之后任�
 novelmaster          # 启动 TUI
 node scripts/start.mjs   # 同上，带前置检查（Node 版本 / 依赖 / 交互终端）+ pidfile
 node scripts/stop.mjs    # 从另一个终端停止（正常在 TUI 里 Ctrl+C 或 /quit）
-npm test             # 全部测试（773 项断言），不启动 TUI
+npm test             # 全部测试（786 项断言），不启动 TUI
 npm run typecheck    # tsc --noEmit，含 src/ 与 tests/，纯类型检查
 ```
 
-**安装 / 卸载**：Windows 跑 `install.bat` / `uninstall.bat`（双击或命令行），Linux 跑 `./install.sh` / `./uninstall.sh`。四个脚本都是壳，逻辑在 `scripts/install.mjs` / `scripts/uninstall.mjs`（查 Node 版本 → npm install → npm link / npm rm -g novelmaster）。**小说数据在 `~/.novelmaster/`（Windows：`%USERPROFILE%\.novelmaster\`），卸载不删数据**，想连数据一起清要手动删该目录。
+**安装 / 卸载**：Windows 跑 `install.bat` / `uninstall.bat`（双击或命令行），Linux 跑 `./install.sh` / `./uninstall.sh`。四个脚本都是壳，逻辑在 `scripts/install.mjs` / `scripts/uninstall.mjs`（查 Node 版本 → npm install → npm link / npm rm -g novelmaster）。**小说数据在 `<启动目录>/.novelmaster/`，卸载不删数据**，想连数据一起清要手动删该目录。
 
 **启动 / 停止**的跨平台入口是 `node scripts/start.mjs` / `node scripts/stop.mjs`（或 `npm run start-checked` / `npm run stop`）。跨平台说明见 `docs/design/architecture.md「开发与调试」`。
 
 **novelMaster 是 TUI，不是后台服务** —— 它要交互终端。想常驻用 tmux（`scripts/start.mjs` 在非 TTY 下会打印具体命令）。
 
-**`cwd` 与数据位置无关**：状态在 `~/.novelmaster/`（全局）。`cwd` 只影响子会话里 `read` 工具的相对路径基准 —— 而小说根的**绝对路径**会写进子会话的基线文本，所以它们不需要靠 `cwd` 找书。
+**数据跟着启动目录走**：状态在 `<启动目录>/.novelmaster/`（`NOVELMASTER_HOME` 可覆盖）。启动目录同时是子会话里 `read` 工具的相对路径基准；小说根的**绝对路径**会写进子会话的基线文本，所以它们不靠相对路径找书。**从哪个目录敲 `novelmaster`，数据就在哪个目录** —— 换目录会看到另一套书，这是用户明确要求的语义（见 `decisions.md「与用户原始要求的偏差清单」`）。
 
 ### 必须知道的五条
 
@@ -104,6 +104,6 @@ npm run typecheck    # tsc --noEmit，含 src/ 与 tests/，纯类型检查
   → 用户验收 → 回填 → /done → 清空上下文 → 下一章
 ```
 
-23 个 `novel_*` 工具注册给主会话（另有 3 个子会话专用）、写入护栏生效、上下文装配器可检查、773 项断言全过（Linux 与 Windows 均验证）。
+24 个 `novel_*` 工具注册给主会话（另有 3 个子会话专用）、写入护栏生效、上下文装配器可检查、786 项断言全过（Linux 与 Windows 均验证）。
 下一步是真实写一章的端到端验收（`docs/design/ops.md「手工」`的 61–91 项）。
 详见 `docs/design/ops.md「里程碑与实施进度」`。

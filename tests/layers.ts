@@ -38,7 +38,7 @@ function makeCtx(cwd: string, onNewSession?: () => void): ExtensionContext {
 }
 
 export default async function run(): Promise<void> {
-  // 状态是全局的（~/.novelmaster/）—— 测试必须把它重定向到临时目录，
+  // 数据在启动目录下（<cwd>/.novelmaster/）—— 测试必须把它重定向到临时目录，
   // 否则多个测试文件会互写同一个 config.json。
   process.env["NOVELMASTER_HOME"] = join(ROOT, ".home");
   rmSync(ROOT, { recursive: true, force: true });
@@ -262,6 +262,20 @@ export default async function run(): Promise<void> {
   const userOutline = messages.find((m) => m.customType === "novelmaster-layer-data");
   check("进大纲层给用户发了清单", userOutline !== undefined);
   check("大纲层清单与注入给 AI 的是同一份", userOutline?.content === outlineSections["novelmaster-layer-data"]);
+
+  /* ---------------- /init 命令 ---------------- */
+
+  section("/init 命令");
+
+  setLayer("menu");
+  messages.length = 0;
+  await commands.get("init")?.("", makeCtx(ROOT));
+  const initTask = messages.find((m) => m.customType === "novelmaster-task");
+  check("/init 发引导任务段（不弹表单）", initTask !== undefined);
+  check("任务段要求逐轮提问、不一次甩全部问题", (initTask?.content ?? "").includes("不要一次甩出所有问题"));
+  check("任务段要求 premise 用用户原话", (initTask?.content ?? "").includes("原话"));
+  check("任务段要求用户点头前不得调 novel_init", (initTask?.content ?? "").includes("用户点头前不得调用 novel_init"));
+  check("任务段要求用户说「算了」就停下", (initTask?.content ?? "").includes("算了"));
 
   /* ---------------- /next 命令 ---------------- */
 

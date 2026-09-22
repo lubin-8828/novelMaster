@@ -89,7 +89,7 @@ novelMaster 是一个跑在终端里的 AI 辅助小说写作工具，单人单�
 | 事件 ID | `E-001` 起 | 同上；伏笔也用 `E-` 前缀 |
 | 章节号 | 三位零填充，从 `001` 起 | 文件名与引用都用这个形式 |
 | 章节伴生文件 | `NNN.txt` / `NNN.outline.md` / `NNN.summary.md` / `NNN.review.md` / `NNN.deai.md` / `NNN.reflow.md` | 同章全部文件共享 `NNN` 前缀，便于按章取用 |
-| 应用状态目录 | `~/.novelmaster/`（全局；可用 `NOVELMASTER_HOME` 覆盖） | 存放 `config.json` 与全部小说 |
+| 应用状态目录 | `<启动目录>/.novelmaster/`（可用 `NOVELMASTER_HOME` 覆盖） | 存放 `config.json` 与全部小说。**数据跟着启动目录走**：从哪个目录敲 `novelmaster`，数据就在哪个目录（见 `decisions.md「与用户原始要求的偏差清单」`） |
 | 小说根目录 | `~/.novelmaster/novels/<slug>/` | 每本小说一个自包含目录 |
 | 操作留痕 | `<小说根>/logs/operations.jsonl` | 追加式 |
 | schema 版本字段 | `schemaVersion`，当前 `1` | 每个 JSON 文档都有 |
