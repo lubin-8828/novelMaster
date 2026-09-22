@@ -109,26 +109,34 @@ novelMaster/
 │   │   ├── index.ts              # 注册全部 novel_* 工具
 │   │   ├── guard.ts              # 护栏：拦 write/edit 写小说根（不动 shell）
 │   │   ├── helper.ts             # withNovel / 错误文本 / 留痕封装 / 失败计数
-│   │   └── read.ts  setting.ts  character.ts  relation.ts  outline.ts  meta.ts  event.ts  chapter.ts  state.ts  inbox.ts  brainstorm.ts
+│   │   └── read.ts  setting.ts  character.ts  relation.ts  outline.ts  meta.ts  event.ts  chapter.ts  state.ts  inbox.ts  brainstorm.ts  review.ts
 │   ├── ai/                       # AI 层：会话、模型、编排。不做文件 I/O 决策
 │   │   ├── models.ts             # 按用途取模型（draft / review / brainstorm）
 │   │   ├── session.ts            # 只读子会话工厂
 │   │   ├── tokens.ts             # token 估算（CJK 按字算，不按字符 /4）
+│   │   ├── parallel.ts           # 并发跑 N 个子任务的骨架（失败处置的单一实现）
 │   │   ├── context-assembler.ts  # 上下文装配器（本项目的中枢）
 │   │   ├── brainstorm/           # 多 agent 讨论（脑暴）
 │   │   │   ├── index.ts          # 编排：并发起角色、收集产出、失败处置
 │   │   │   └── input.ts          # 角色输入包（基线 + 视角）
-│   │   ├── review/               # 审查引擎                      ← 里程碑 8
+│   │   ├── review/               # 审查引擎
+│   │   │   ├── index.ts          # 编排：3 个只读审查员 + 依据校验 + 落盘
+│   │   │   ├── checklist.ts      # 7 类 28 项清单（写死在代码）
+│   │   │   ├── input.ts          # 审查输入（九段 + 本章正文 + 预筛事实）
+│   │   │   ├── merge.ts          # 机械合并 + 标记依据无效
+│   │   │   └── report.ts         # NNN.review.md 渲染
 │   │   └── deai/                 # 去 AI 味引擎                  ← 里程碑 9
 │   └── prompts/                  # 各角色 system prompt 模板      ← 里程碑 4
 ├── tests/
 │   ├── harness.ts                # check / section / 失败计数
 │   ├── all.ts                    # 测试入口（npm test）
 │   ├── smoke.ts                  # 扩展装配、层面表、提示词注入、文档一致性
-│   ├── layers.ts                 # 层面数据装载与进层面时的用户清单
+│   ├── layers.ts                 # 层面装载、写作流程与 /next
 │   ├── context.ts                # 上下文装配器与 /context 输出
 │   ├── data.ts                   # 数据层（schema / ID / 追加式 / 状态机）
-│   └── tools.ts                  # 工具层与写入护栏
+│   ├── tools.ts                  # 工具层与写入护栏
+│   ├── brainstorm.ts             # 多 agent 讨论
+│   └── report.ts                 # 审查引擎（清单 / 合并 / 依据校验 / 渲染）
 ├── docs/design/                  # 设计子文档
 └── novels/                       # 默认小说根目录（git 忽略）
 ```

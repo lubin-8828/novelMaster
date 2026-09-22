@@ -12,6 +12,7 @@ import runData from "./data.ts";
 import runTools from "./tools.ts";
 import runBrainstorm from "./brainstorm.ts";
 import runContext from "./context.ts";
+import runReport from "./report.ts";
 
 await runSmoke();
 await runLayers();
@@ -19,5 +20,6 @@ runData();
 await runTools();
 await runBrainstorm();
 runContext();
+await runReport();
 
 finish();

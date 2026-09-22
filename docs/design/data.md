@@ -433,12 +433,14 @@ primaryEvent: E-003
 | `novel_inbox_append` | 追加想法 | `text`, `tags?` |
 | `novel_brainstorm` | **主会话**：按给定方向起多 agent 讨论 | `angle`, `perspectives[]` |
 | `submit_brainstorm` | **仅讨论子会话可见**：提交角色产出 | `angle`, `points[]` |
+| `novel_review` | **主会话**：跑一次审查（3 个只读子会话 → 合并 → 落盘报告） | 无参数（章号取自 `state.json`） |
+| `submit_findings` | **仅审查子会话可见**：提交结构化审查结果 | `findings[]`（见 `pipeline.md「审查引擎」`） |
 | `submit_findings` | **仅审查子会话可见**：提交结构化审查结果 | 见 `pipeline.md「审查引擎」` |
 | `submit_brainstorm` | **仅脑暴子会话可见**：提交角色产出 | `angle`, `points[]` |
 
 表格之外的参数细节，这些是「枚举值写死在代码里」的落点 —— 让 LLM 自造枚举值是另一种形式的结构漂移：
 
-**共 22 个 `novel_*` 工具定义**，其中 **21 个注册给主会话**；`submit_brainstorm` 只注入讨论子会话（里程碑 4b），`submit_findings` 只注入审查子会话（里程碑 8）。
+**共 24 个 `novel_*` 工具定义**，其中 **22 个注册给主会话**；`submit_brainstorm` 只注入讨论子会话（里程碑 4b）、`submit_findings` 只注入审查子会话（里程碑 8）。
 
 **为什么子会话专属工具不能注册给主会话**：如果主会话也能调 `submit_brainstorm`，它就能自己「提交」一份假产出冒充某个角色 —— 那套「多视角」当场作废。工具的可见性就是这条约束的代码实现。
 

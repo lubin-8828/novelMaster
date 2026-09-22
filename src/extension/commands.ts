@@ -3,6 +3,7 @@ import { CMD, ENTRY_LAYERS, LAYERS, ALL_COMMANDS, COMMANDS, getLayer, setLayer, 
 import { renderContext, renderHelp, renderNextTask, renderStatus, CHAPTER_STATUS_LABEL } from "./render.ts";
 import { renderLayerData, safeLayerData } from "./layer-data.ts";
 import { assemble } from "../ai/context-assembler.ts";
+import { runReviewAndPersist } from "../ai/review/index.ts";
 import { errorText } from "../data/errors.ts";
 import { openNovel } from "../data/novel.ts";
 import { defaultNovelRoot, writeConfig } from "../data/paths.ts";
@@ -75,6 +76,28 @@ export function registerCommands(pi: ExtensionAPI): void {
       } catch (err) {
         // 装配失败要说清原因：这里读七八个文件，静默失败会让用户以为「这份上下文就是空的」。
         ctx.ui.notify(`装配上下文失败：${errorText(err)}`, "error");
+      }
+    },
+  });
+
+  pi.registerCommand(CMD.review, {
+    description: "审查（章末自动触发，也可手动补跑）",
+    handler: async (_args, ctx) => {
+      const novel = openNovel(ctx.cwd);
+      if (novel === null) {
+        ctx.ui.notify("还没有打开小说。先用 /init 新建一本。", "warning");
+        return;
+      }
+      try {
+        const result = await runReviewAndPersist({
+          novel,
+          chapter: novel.state.currentChapter,
+          cwd: ctx.cwd,
+        });
+        emit(pi, "novelmaster-review", `${result.text}\n\n──────── 报告全文 ────────\n\n${result.reportMarkdown}`);
+      } catch (err) {
+        // 审查中止要说清原因：静默失败会让用户以为「这章审过了、没问题」。
+        ctx.ui.notify(errorText(err), "error");
       }
     },
   });

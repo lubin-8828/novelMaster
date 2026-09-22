@@ -18,6 +18,7 @@ import { eventTools } from "./event.ts";
 import { chapterTools } from "./chapter.ts";
 import { stateTools } from "./state.ts";
 import { brainstormTools } from "./brainstorm.ts";
+import { reviewTools } from "./review.ts";
 
 export const ALL_TOOLS = [
   ...readTools,
@@ -31,6 +32,7 @@ export const ALL_TOOLS = [
   ...stateTools,
   ...inboxTools,
   ...brainstormTools,
+  ...reviewTools,
 ];
 
 export const TOOL_NAMES = ALL_TOOLS.map((tool) => tool.name);

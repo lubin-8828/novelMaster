@@ -87,7 +87,9 @@ export const chapterTools = [
         }
         const note = result.hits.length > 0 ? `（用户已确认 ${result.hits.length} 处 markdown 标记）` : "";
         return {
-          text: `已写入第 ${params.chapter} 章正文，共 ${result.wordCount} 字${note}。`,
+          text:
+            `已写入第 ${params.chapter} 章正文，共 ${result.wordCount} 字${note}。` +
+            `\n\n**接下来两步必做**：① novel_state_update 置 drafted；② novel_review 跑审查（它会置 auto_reviewed）。`,
           target: `chapters/${String(params.chapter).padStart(3, "0")}.txt`,
           details: { written: true, wordCount: result.wordCount, hits: result.hits },
         };

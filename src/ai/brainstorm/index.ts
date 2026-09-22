@@ -11,6 +11,7 @@
 import { defineTool } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { errorText } from "../../data/errors.ts";
+import { runParallel, type TaskOutcome, type TaskStatus } from "../parallel.ts";
 import { STRICT } from "../../data/schema.ts";
 import type { OpenNovel } from "../../data/novel.ts";
 import { readIndexTool } from "../../tools/read.ts";
@@ -29,7 +30,7 @@ export interface Point {
   risk?: string | undefined;
 }
 
-export type RoleStatus = "ok" | "missing" | "fatal";
+export type RoleStatus = TaskStatus;
 
 export interface RoleOutcome {
   role: RoleSpec;
@@ -45,12 +46,8 @@ export interface DiscussResult {
   fatal: boolean;
 }
 
-export type RoleRunOutcome =
-  | { kind: "ok"; points: Point[] }
-  /** 跑完了但没提交（含超时）。可容忍：如实标注即可。 */
-  | { kind: "missing"; detail: string }
-  /** 设施起不来。不可容忍：继续跑没有意义。 */
-  | { kind: "fatal"; detail: string };
+/** 与 `parallel.TaskOutcome` 同一形状 —— 失败处置只有一处实现。 */
+export type RoleRunOutcome = TaskOutcome<Point[]>;
 
 export type RoleRunner = (
   role: RoleSpec,
@@ -77,29 +74,20 @@ export async function discuss(options: DiscussOptions, runner?: RoleRunner): Pro
   const baseline = renderBaseline(options.novel);
   const run = runner ?? defaultRoleRunner();
 
-  let done = 0;
-  const settled = await Promise.all(
-    options.roles.map(async (role) => {
-      let outcome: RoleRunOutcome;
-      try {
-        outcome = await run(role, { baseline, angle: options.angle, novel: options.novel, cwd: options.cwd });
-      } catch (err) {
-        // 走到这里说明 runRole 自己没兜住 —— 当成设施级失败，不猜它想表达什么。
-        outcome = { kind: "fatal", detail: errorText(err) };
-      }
-      done += 1;
-      options.onProgress?.(done, options.roles.length, role);
-      return { role, outcome };
-    }),
+  const results = await runParallel(
+    options.roles,
+    (role) => run(role, { baseline, angle: options.angle, novel: options.novel, cwd: options.cwd }),
+    options.onProgress,
   );
 
-  const outcomes: RoleOutcome[] = settled.map(({ role, outcome }) => {
-    if (outcome.kind === "ok") return { role, status: "ok", points: outcome.points, detail: "" };
-    if (outcome.kind === "missing") return { role, status: "missing", points: [], detail: outcome.detail };
-    return { role, status: "fatal", points: [], detail: outcome.detail };
-  });
+  const outcomes: RoleOutcome[] = results.map((result) => ({
+    role: result.role,
+    status: result.status,
+    points: result.value ?? [],
+    detail: result.detail,
+  }));
 
-  return { outcomes, fatal: outcomes.some((outcome) => outcome.status === "fatal") };
+  return { outcomes, fatal: results.some((result) => result.status === "fatal") };
 }
 
 /** 生产实现：起一个只读子会话，产出通过 submit_brainstorm 收集。 */
@@ -138,7 +126,7 @@ function defaultRoleRunner(): RoleRunner {
           `模型没有调用 submit_brainstorm` + (excerpt === "" ? "，也未留下输出" : `；它的最后输出：…${excerpt}`),
       };
     }
-    return { kind: "ok", points: collected };
+    return { kind: "ok", value: collected };
   };
 }
 

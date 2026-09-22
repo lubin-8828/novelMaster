@@ -138,7 +138,7 @@ for (const layer of Object.keys(LAYERS) as Layer[]) {
 }
 
 const pending = ALL_COMMANDS.filter((n) => COMMANDS[n].milestone !== undefined);
-check("未实现的命令都标了里程碑", pending.length === 4, `实际 ${pending.length} 个：${pending.join(", ")}`);
+check("未实现的命令都标了里程碑", pending.length === 3, `实际 ${pending.length} 个：${pending.join(", ")}`);
 
 check(
   "状态栏包含层面标签与章状态",

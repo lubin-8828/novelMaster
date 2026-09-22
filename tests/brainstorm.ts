@@ -37,12 +37,12 @@ const ROLES: RoleSpec[] = [
 
 const OK_RUNNER: RoleRunner = async (role) => ({
   kind: "ok",
-  points: [{ claim: `${role.name}的主张`, reason: `${role.name}的理由` }],
+  value: [{ claim: `${role.name}的主张`, reason: `${role.name}的理由` }],
 });
 
-const onePoint = (roleName: string): { kind: "ok"; points: Point[] } => ({
+const onePoint = (roleName: string): { kind: "ok"; value: Point[] } => ({
   kind: "ok",
-  points: [{ claim: `${roleName}的主张`, reason: `${roleName}的理由` }],
+  value: [{ claim: `${roleName}的主张`, reason: `${roleName}的理由` }],
 });
 
 export default async function run(): Promise<void> {
